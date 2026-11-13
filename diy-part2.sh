@@ -79,8 +79,8 @@ chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
 # 4. دمج خلفية الثيم المخصصة (bg.img) وتفعيل ثيم Argon
 # ==========================================
 mkdir -p package/base-files/files/www/luci-static/argon/background/
-if [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
-    cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
+if [ -f "$GITHUB_WORKSPACE/bg.img" ]; then
+    cp "$GITHUB_WORKSPACE/bg.img" package/base-files/files/www/luci-static/argon/background/bg.jpg
     echo "✅ تم نسخ خلفية الثيم بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.img في جذر المشروع."
@@ -98,36 +98,7 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تخصيص سلوك اللمبات (LEDs): إضاءة اللمبتين برتقالي عند البدء ثم الاستقرار على لمبة واحدة
-# ==========================================
-cat << 'EOF' > package/base-files/files/etc/uci-defaults/97-custom-leds
-#!/bin/sh
-# ضبط إضاءة اللمبات عند الإقلاع والاستقرار
-for led in /sys/class/leds/*; do
-    if [ -d "$led" ]; then
-        # إعطاء إشارة البداية
-        echo 255 > "$led/brightness" 2>/dev/null || true
-    fi
-done
-# الاستقرار على لمبة التشغيل الأساسية وإطفاء البقية بعد الإقلاع
-sleep 2
-for led in /sys/class/leds/*; do
-    if [ -d "$led" ]; then
-        echo 0 > "$led/brightness" 2>/dev/null || true
-    fi
-done
-# تفعيل لمبة الحالة أو الطاقة المحددة فقط
-if [ -d "/sys/class/leds/*power*" ]; then
-    echo 255 > /sys/class/leds/*power*/brightness 2>/dev/null || true
-elif [ -d "/sys/class/leds/*status*" ]; then
-    echo 255 > /sys/class/leds/*status*/brightness 2>/dev/null || true
-fi
-exit 0
-EOF
-chmod +x package/base-files/files/etc/uci-defaults/97-custom-leds
-
-# ==========================================
-# 6. حقن ورفع سقف القيم في واجهة LuCI لتشمل 36 dBm (وهمية/عرض فقط)
+# 5. حقن ورفع سقف القيم في واجهة LuCI لتشمل 36 dBm (وهمية/عرض فقط)
 # ==========================================
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
@@ -148,7 +119,7 @@ else
 fi
 
 # ==========================================
-# 7. تعطيل الخدمات غير الضرورية (مع إبقاء SSH يعمل)
+# 6. تعطيل الخدمات غير الضرورية (مع إبقاء SSH يعمل)
 # ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-disable-router-services
 #!/bin/sh
@@ -163,7 +134,7 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-disable-router-services
 
 # ==========================================
-# 8. إخفاء خيارات SSH والـ Keys بشكل جذري من واجهة LuCI
+# 7. إخفاء خيارات SSH والـ Keys بشكل جذري من واجهة LuCI
 # ==========================================
 rm -f feeds/luci/modules/luci-mod-system/luasrc/controller/admin/keys.lua 2>/dev/null || true
 find . -name "keys.lua" -exec rm -f {} \; 2>/dev/null || true
@@ -173,7 +144,7 @@ if [ -f "feeds/luci/collections/luci/Makefile" ]; then
 fi
 
 # ==========================================
-# 9. تعيين طاقة الإرسال على 36 dBm وإلغاء قيود الدولة ('US')
+# 8. تعيين طاقة الإرسال على 36 dBm وإلغاء قيود الدولة ('US')
 # ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-fix-wifi-power
 #!/bin/sh
