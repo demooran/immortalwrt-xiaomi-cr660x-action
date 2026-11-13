@@ -119,6 +119,7 @@ new file mode 100644
 +		net_yellow {
 +			label = "yellow:net";
 +			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
++   linux,default-trigger = "timer";
 +		};
 +
 +		net_blue {
