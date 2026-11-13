@@ -79,8 +79,8 @@ chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
 # 4. دمج خلفية الثيم المخصصة (bg.img) وتفعيل ثيم Argon
 # ==========================================
 mkdir -p package/base-files/files/www/luci-static/argon/background/
-if [ -f "$GITHUB_WORKSPACE/bg.img" ]; then
-    cp "$GITHUB_WORKSPACE/bg.img" package/base-files/files/www/luci-static/argon/background/bg.jpg
+if [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
+    cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
     echo "✅ تم نسخ خلفية الثيم بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.img في جذر المشروع."
