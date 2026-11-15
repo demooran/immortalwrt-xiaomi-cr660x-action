@@ -133,7 +133,7 @@ fi
 # ==========================================
 # 6. تعطيل الخدمات غير الضرورية (مع إبقاء SSH يعمل)
 # ==========================================
-cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-disable-router-services
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/97-disable-router-services
 #!/bin/sh
 /etc/init.d/firewall disable 2>/dev/null || true
 /etc/init.d/eoip disable 2>/dev/null || true
@@ -143,7 +143,7 @@ cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-disable-router-servi
 /etc/init.d/dnsmasq disable 2>/dev/null || true
 exit 0
 EOF
-chmod +x package/base-files/files/etc/uci-defaults/98-disable-router-services
+chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 
 # ==========================================
 # 7. إخفاء خيارات SSH و Keys من واجهة LuCI
