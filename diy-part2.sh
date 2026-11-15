@@ -98,21 +98,33 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. حقن ورفع سقف القيم في واجهة LuCI لتشمل 36 dBm (وهمية/عرض فقط)
+# 5. تعديل واجهة wireless.js (إضافة dBm + عرض Status)
 # ==========================================
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
     
+    # 1. إضافة قيم dBm (يحدد الإصدار تلقائياً)
     if grep -q "for(let p of pwrlist)" "$WIRELESS_JS"; then
-        sed -i "s|for(let p of pwrlist)|for(let i=27; i<=36; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(let p of pwrlist)|g" "$WIRELESS_JS"
-        echo "✅ تم حقن القيم حتى 36 dBm للإصدار الحديث."
+        sed -i "s|for(let p of pwrlist)|for(let i=27; i<=40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(let p of pwrlist)|g" "$WIRELESS_JS"
+        echo "✅ تمت إضافة قيم dBm (الإصدار الحديث)."
     elif grep -q "for(var i=0;i<pwrlist.length;i++)" "$WIRELESS_JS"; then
-        sed -i "s|for(var i=0;i<pwrlist.length;i++)|for(let j=27; j<=36; j++) { pwrlist.push({dbm: j, mw: Math.round(Math.pow(10, (j-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(var i=0;i<pwrlist.length;i++)|g" "$WIRELESS_JS"
-        echo "✅ تم حقن القيم حتى 36 dBm للإصدار القديم."
+        sed -i "s|for(var i=0;i<pwrlist.length;i++)|for(let j=27; j<=40; j++) { pwrlist.push({dbm: j, mw: Math.round(Math.pow(10, (j-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(var i=0;i<pwrlist.length;i++)|g" "$WIRELESS_JS"
+        echo "✅ تمت إضافة قيم dBm (الإصدار القديم)."
     else
-        echo "⚠️ لم يتم العثور على النمط المناسب لحقن القيم."
+        echo "⚠️ لم يتم العثور على نمط قائمة dBm."
+    fi
+
+    # 2. تعديل Status ليعرض القيمة من uci
+    # نستخدم الفاصل # لتجنب مشاكل الرمز ||
+    sed -i "s#radioNet.getTXPower()}#uci.get('wireless', 'radio0', 'txpower') || radioNet.getTXPower()}#g" "$WIRELESS_JS"
+
+    # التحقق من نجاح تعديل Status
+    if grep -q "uci.get('wireless', 'radio0', 'txpower')" "$WIRELESS_JS"; then
+        echo "✅ تم تعديل Status ليعرض القيمة من uci."
+    else
+        echo "⚠️ لم يتم تعديل Status."
     fi
 else
     echo "⚠️ لم يتم العثور على ملف wireless.js."
@@ -134,13 +146,15 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-disable-router-services
 
 # ==========================================
-# 7. إخفاء خيارات SSH والـ Keys بشكل جذري من واجهة LuCI
+# 7. إخفاء خيارات SSH و Keys من واجهة LuCI
 # ==========================================
-rm -f feeds/luci/modules/luci-mod-system/luasrc/controller/admin/keys.lua 2>/dev/null || true
-find . -name "keys.lua" -exec rm -f {} \; 2>/dev/null || true
-
-if [ -f "feeds/luci/collections/luci/Makefile" ]; then
-    sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
+ADMIN_JS=$(find . -name "admin.js" -path "*luci-mod-system*" 2>/dev/null | head -n 1)
+if [ -n "$ADMIN_JS" ] && [ -f "$ADMIN_JS" ]; then
+    echo "✅ تم العثور على admin.js، جاري إخفاء خيارات SSH..."
+    sed -i "s|var s = m.section(form.NamedSection, 'dropbear', 'dropbear')|/* Hidden */ /* var s = m.section(form.NamedSection, 'dropbear', 'dropbear') */|g" "$ADMIN_JS"
+    sed -i "s|var s = m.section(form.NamedSection, 'keys', 'system')|/* Hidden */ /* var s = m.section(form.NamedSection, 'keys', 'system') */|g" "$ADMIN_JS"
+else
+    echo "⚠️ لم يتم العثور على admin.js"
 fi
 
 # ==========================================
