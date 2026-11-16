@@ -98,7 +98,6 @@ chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 # ==========================================
 # 5. تعديل wireless.js (dBm + Status) - البحث في feeds و package
 # ==========================================
-# البحث في feeds أولاً، ثم package
 WIRELESS_JS=$(find feeds/ package/ -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
