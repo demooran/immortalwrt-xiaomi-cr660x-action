@@ -25,32 +25,32 @@ if [ -f "$WIFI_FILE" ]; then
 fi
 
 # ==========================================
-# 3. إعدادات وضع الـ Access Point والدولة - بدون VLAN وبدون Gateway
+# 3. إعدادات وضع الـ Access Point والدولة
 # ==========================================
 mkdir -p package/base-files/files/etc/uci-defaults
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-set-ap-mode
 #!/bin/sh
 
-# 1. حذف واجهات الـ WAN تماماً وإبقاء LAN فقط
+# 1. حذف واجهات الـ WAN
 uci delete network.wan 2>/dev/null || true
 uci delete network.wan6 2>/dev/null || true
 
-# 2. تعطيل خدمة DHCP على واجهة LAN (لأن الميكروتك هو من سيوفر العناوين)
+# 2. تعطيل DHCP على LAN
 uci set dhcp.lan.ignore='1'
 uci set dhcp.lan.dynamicdhcp='0'
 
-# 3. تعطيل خدمات IPv6
+# 3. تعطيل IPv6
 uci set dhcp.lan.ra='disabled'
 uci set dhcp.lan.dhcpv6='disabled'
 uci set dhcp.lan.ndp='disabled'
 
-# 4. تعيين عنوان IP ثابت للجهاز (بدون Gateway)
+# 4. تعيين IP ثابت (بدون Gateway)
 uci set network.lan.proto='static'
 uci set network.lan.ipaddr='192.168.1.21'
 uci set network.lan.netmask='255.255.255.0'
 uci delete network.lan.gateway 2>/dev/null || true
 
-# 5. إعدادات الواي فاي (عزل العملاء وإلغاء الفصل التلقائي)
+# 5. عزل العملاء
 uci set wireless.default_radio0.isolate='1'
 uci set wireless.default_radio0.disassoc_low_ack='0'
 if uci get wireless.default_radio1 >/dev/null 2>&1; then
@@ -58,16 +58,14 @@ if uci get wireless.default_radio1 >/dev/null 2>&1; then
     uci set wireless.default_radio1.disassoc_low_ack='0'
 fi
 
-# 6. تعيين اسم الشبكة (SSID) وكلمة المرور (بدون كلمة مرور)
+# 6. تعيين SSID
 uci set wireless.default_radio0.ssid='promax'
 uci set wireless.default_radio0.encryption='none'
-
 if uci get wireless.default_radio1 >/dev/null 2>&1; then
     uci set wireless.default_radio1.ssid='promax_5G'
     uci set wireless.default_radio1.encryption='none'
 fi
 
-# حفظ التغييرات
 uci commit dhcp
 uci commit network
 uci commit wireless
@@ -76,14 +74,14 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
 
 # ==========================================
-# 4. دمج خلفية الثيم المخصصة (bg.jpg) وتفعيل ثيم Argon
+# 4. دمج خلفية الثيم وتفعيل Argon
 # ==========================================
 mkdir -p package/base-files/files/www/luci-static/argon/background/
 if [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
     echo "✅ تم نسخ خلفية الثيم بنجاح."
 else
-    echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg في جذر المشروع."
+    echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
 fi
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
@@ -98,40 +96,39 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تعديل واجهة wireless.js (إضافة dBm + عرض Status)
+# 5. تعديل wireless.js (dBm + Status) - البحث في feeds و package
 # ==========================================
-WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
+# البحث في feeds أولاً، ثم package
+WIRELESS_JS=$(find feeds/ package/ -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
     
-    # 1. إضافة قيم dBm (يحدد الإصدار تلقائياً)
+    # 1. إضافة قيم dBm
     if grep -q "for(let p of pwrlist)" "$WIRELESS_JS"; then
         sed -i "s|for(let p of pwrlist)|for(let i=27; i<=40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(let p of pwrlist)|g" "$WIRELESS_JS"
-        echo "✅ تمت إضافة قيم dBm (الإصدار الحديث)."
+        echo "✅ تمت إضافة قيم dBm (الحديث)."
     elif grep -q "for(var i=0;i<pwrlist.length;i++)" "$WIRELESS_JS"; then
         sed -i "s|for(var i=0;i<pwrlist.length;i++)|for(let j=27; j<=40; j++) { pwrlist.push({dbm: j, mw: Math.round(Math.pow(10, (j-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(var i=0;i<pwrlist.length;i++)|g" "$WIRELESS_JS"
-        echo "✅ تمت إضافة قيم dBm (الإصدار القديم)."
+        echo "✅ تمت إضافة قيم dBm (القديم)."
     else
         echo "⚠️ لم يتم العثور على نمط قائمة dBm."
     fi
 
-    # 2. تعديل Status ليعرض القيمة من uci
-    # نستخدم الفاصل # لتجنب مشاكل الرمز ||
+    # 2. تعديل Status (استخدام الفاصل #)
     sed -i "s#radioNet.getTXPower()}#uci.get('wireless', 'radio0', 'txpower') || radioNet.getTXPower()}#g" "$WIRELESS_JS"
 
-    # التحقق من نجاح تعديل Status
     if grep -q "uci.get('wireless', 'radio0', 'txpower')" "$WIRELESS_JS"; then
-        echo "✅ تم تعديل Status ليعرض القيمة من uci."
+        echo "✅ تم تعديل Status."
     else
         echo "⚠️ لم يتم تعديل Status."
     fi
 else
-    echo "⚠️ لم يتم العثور على ملف wireless.js."
+    echo "⚠️ لم يتم العثور على wireless.js."
 fi
 
 # ==========================================
-# 6. تعطيل الخدمات غير الضرورية (مع إبقاء SSH يعمل)
+# 6. تعطيل الخدمات (97)
 # ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/97-disable-router-services
 #!/bin/sh
@@ -146,11 +143,11 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 
 # ==========================================
-# 7. إخفاء خيارات SSH و Keys من واجهة LuCI
+# 7. إخفاء SSH و Keys (البحث في feeds و package)
 # ==========================================
-ADMIN_JS=$(find . -name "admin.js" -path "*luci-mod-system*" 2>/dev/null | head -n 1)
+ADMIN_JS=$(find feeds/ package/ -name "admin.js" -path "*luci-mod-system*" 2>/dev/null | head -n 1)
 if [ -n "$ADMIN_JS" ] && [ -f "$ADMIN_JS" ]; then
-    echo "✅ تم العثور على admin.js، جاري إخفاء خيارات SSH..."
+    echo "✅ تم العثور على admin.js في: $ADMIN_JS"
     sed -i "s|var s = m.section(form.NamedSection, 'dropbear', 'dropbear')|/* Hidden */ /* var s = m.section(form.NamedSection, 'dropbear', 'dropbear') */|g" "$ADMIN_JS"
     sed -i "s|var s = m.section(form.NamedSection, 'keys', 'system')|/* Hidden */ /* var s = m.section(form.NamedSection, 'keys', 'system') */|g" "$ADMIN_JS"
 else
@@ -158,15 +155,15 @@ else
 fi
 
 # ==========================================
-# 8. تعيين طاقة الإرسال على 36 dBm وإلغاء قيود الدولة ('US')
+# 8. تعيين طاقة 36 dBm والدولة (PA)
 # ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-fix-wifi-power
 #!/bin/sh
 uci -q batch << EOB
 set wireless.@wifi-device[0].disabled='0'
 set wireless.@wifi-device[1].disabled='0'
-set wireless.@wifi-device[0].country='US'
-set wireless.@wifi-device[1].country='US'
+set wireless.@wifi-device[0].country='PA'
+set wireless.@wifi-device[1].country='PA'
 set wireless.@wifi-device[0].txpower='36'
 set wireless.@wifi-device[1].txpower='36'
 commit wireless
