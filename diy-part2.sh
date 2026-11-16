@@ -156,6 +156,10 @@ chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 # ==========================================
 # 7. إخفاء SSH و Keys (البحث في feeds و package)
 # ==========================================
+echo "=== البحث عن ملفات SSH في LuCI ==="
+find feeds/luci -name "*.js" 2>/dev/null | xargs grep -l "dropbear" 2>/dev/null | head -n 5
+find feeds/luci -name "*.js" 2>/dev/null | xargs grep -l "SSH" 2>/dev/null | head -n 5
+echo "=================================="
 ADMIN_JS=$(find feeds/ package/ -name "admin.js" -path "*luci-mod-system*" 2>/dev/null | head -n 1)
 if [ -n "$ADMIN_JS" ] && [ -f "$ADMIN_JS" ]; then
     echo "✅ تم العثور على admin.js في: $ADMIN_JS"
