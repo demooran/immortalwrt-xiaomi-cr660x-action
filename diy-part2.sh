@@ -98,11 +98,19 @@ chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 # ==========================================
 # 5. تعديل wireless.js (dBm + Status) - البحث في feeds و package
 # ==========================================
+# 1. أولاً: البحث عن ملف wireless.js وتعريف المتغير
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
+
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
-    
-    # 1. إضافة قيم dBm
+
+    # 2. طباعة محتوى الملف لمعرفة الأنماط الصحيحة
+    echo "=== فحص محتوى wireless.js ==="
+    grep -n "pwrlist" "$WIRELESS_JS" 2>/dev/null | head -n 5
+    grep -n "getTXPower" "$WIRELESS_JS" 2>/dev/null | head -n 5
+    echo "============================="
+
+    # 3. إضافة قيم dBm
     if grep -q "for(let p of pwrlist)" "$WIRELESS_JS"; then
         sed -i "s|for(let p of pwrlist)|for(let i=27; i<=40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for(let p of pwrlist)|g" "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm (الحديث)."
@@ -112,6 +120,24 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     else
         echo "⚠️ لم يتم العثور على نمط قائمة dBm."
     fi
+
+    # 4. تعديل Status
+    sed -i "s#radioNet.getTXPower()}#uci.get('wireless', 'radio0', 'txpower') || radioNet.getTXPower()}#g" "$WIRELESS_JS"
+
+    if grep -q "uci.get('wireless', 'radio0', 'txpower')" "$WIRELESS_JS"; then
+        echo "✅ تم تعديل Status."
+    else
+        echo "⚠️ لم يتم تعديل Status."
+    fi
+
+else
+    echo "⚠️ لم يتم العثور على wireless.js."
+fi
+
+# 5. البحث عن admin.js وطباعة المسار
+echo "=== البحث عن admin.js ==="
+find . -name "admin.js" 2>/dev/null | head -n 5
+echo "============================="
 
     # 2. تعديل Status (استخدام الفاصل #)
     sed -i "s#radioNet.getTXPower()}#uci.get('wireless', 'radio0', 'txpower') || radioNet.getTXPower()}#g" "$WIRELESS_JS"
