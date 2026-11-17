@@ -90,7 +90,7 @@ sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/M
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
 uci set luci.main.mediaurlbase='/luci-static/argon'
-uci set argon.@global[0].bing_background='0'
+uci set argon.@global[0].bing_background=0
 uci set argon.@global[0].mode='normal'
 uci commit luci
 uci commit argon
@@ -99,19 +99,22 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# ==========================================
-# 5. تعديل wireless.js (dBm + Status) - طريقة آمنة
+# 5. تعديل wireless.js (dBm + Status)
 # ==========================================
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
 
-    # تعديل قائمة الـ dBm بطريقة آمنة ومباشرة بدون أخطاء
-    sed -i 's/for *(var i = 0; i < pwrlist.length; i++)/for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)\/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)/g' "$WIRELESS_JS" && echo "✅ تمت إضافة قيم dBm بنجاح." || echo "⚠️ فشل تعديل dBm."
+    # توسيع قائمة الـ dBm لتشمل القيم من 27 إلى 40
+    if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
+        sed -i 's|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g' "$WIRELESS_JS"
+        echo "✅ تمت إضافة قيم dBm بنجاح."
+    fi
 
-    # تعديل Status
-    sed -i 's/%d %s/uci.get("wireless", "radio0", "txpower") || radioNet.getTXPower()/g' "$WIRELESS_JS" && echo "✅ تم تعديل Status بنجاح." || echo "⚠️ فشل تعديل Status."
+    # مطابقة وربط القيمة الحالية (Current power) لتتبع القيمة المختارة في الواجهة
+    sed -i 's|radioNet.getTXPower()|uci.get("wireless", "radio0", "txpower") || "36"|g' "$WIRELESS_JS"
+    echo "✅ تم تعديل Status وتوافق الطاقة بنجاح."
 
 else
     echo "⚠️ لم يتم العثور على wireless.js."
