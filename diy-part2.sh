@@ -99,23 +99,19 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تعديل wireless.js (dBm + Status)
+# ==========================================
+# 5. تعديل wireless.js (dBm + Status) - طريقة آمنة
 # ==========================================
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
 
-    # إضافة قيم dBm
-    if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i 's|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g' "$WIRELESS_JS"
-        echo "✅ تمت إضافة قيم dBm."
-    else
-        echo "⚠️ لم يتم العثور على نمط قائمة dBm."
-    fi
+    # تعديل قائمة الـ dBm بطريقة آمنة ومباشرة بدون أخطاء
+    sed -i 's/for *(var i = 0; i < pwrlist.length; i++)/for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)\/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)/g' "$WIRELESS_JS" && echo "✅ تمت إضافة قيم dBm بنجاح." || echo "⚠️ فشل تعديل dBm."
 
     # تعديل Status
-    sed -i 's|%d %s|uci.get("wireless", "radio0", "txpower") || radioNet.getTXPower()|g' "$WIRELESS_JS"
+    sed -i 's/%d %s/uci.get("wireless", "radio0", "txpower") || radioNet.getTXPower()/g' "$WIRELESS_JS" && echo "✅ تم تعديل Status بنجاح." || echo "⚠️ فشل تعديل Status."
 
 else
     echo "⚠️ لم يتم العثور على wireless.js."
