@@ -86,6 +86,7 @@ fi
 
 # جعل الثيم الافتراضي هو Argon حصرياً
 sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
+sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/modules/luci-base/Makefile 2>/dev/null || true
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
@@ -136,19 +137,19 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 
 # ==========================================
-# 7. إخفاء محتوى صفحات إعدادات SSH والـ Keys من الواجهة
+# 7. إخفاء محتوى صفحات إعدادات SSH والـ Keys من الواجهة نهائياً
 # ==========================================
 DROPBEAR_JS="feeds/luci/modules/luci-mod-system/htdocs/luci-static/resources/view/system/dropbear.js"
 if [ -f "$DROPBEAR_JS" ]; then
-    echo "✅ تم العثور على dropbear.js، جاري تحييده..."
     cat << 'EOF' > "$DROPBEAR_JS"
 'use strict';
 'require view';
+'require dom';
 return view.extend({
     render: function() {
-        return E('div', { 'class': 'cbi-map' }, [
+        return E('div', { 'class': 'container' }, [
             E('h2', {}, _('SSH Access')),
-            E('p', {}, _('SSH configuration is managed via terminal.'))
+            E('p', {}, _('SSH configuration is managed strictly via terminal.'))
         ]);
     }
 });
@@ -157,13 +158,13 @@ fi
 
 SSHKEYS_JS="feeds/luci/modules/luci-mod-system/htdocs/luci-static/resources/view/system/sshkeys.js"
 if [ -f "$SSHKEYS_JS" ]; then
-    echo "✅ تم العثور على sshkeys.js، جاري تحييده..."
     cat << 'EOF' > "$SSHKEYS_JS"
 'use strict';
 'require view';
+'require dom';
 return view.extend({
     render: function() {
-        return E('div', { 'class': 'cbi-map' }, [
+        return E('div', { 'class': 'container' }, [
             E('h2', {}, _('SSH-Keys')),
             E('p', {}, _('SSH keys configuration is hidden.'))
         ]);
