@@ -107,15 +107,18 @@ WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
 
+    # تنظيف الملف من الرموز الخفية لمنع أخطاء الـ sed
+    sed -i 's/\r//g' "$WIRELESS_JS"
+
     # توسيع قائمة الـ dBm لتشمل القيم من 27 إلى 40
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
         sed -i 's|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g' "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm بنجاح."
     fi
 
-    # مطابقة وربط القيمة الحالية (Current power) لتتبع القيمة المختارة في الواجهة
-    sed -i 's|radioNet.getTXPower()|uci.get("wireless", "radio0", "txpower") || "36"|g' "$WIRELESS_JS"
-    echo "✅ تم تعديل Status وتوافق الطاقة بنجاح."
+    # مطابقة وربط القيمة الحالية (Current power) بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
+    awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
+    echo "✅ تم تعديل Status وتوافق الطاقة ديناميكياً بنجاح."
 
 else
     echo "⚠️ لم يتم العثور على wireless.js."
