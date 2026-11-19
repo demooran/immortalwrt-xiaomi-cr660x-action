@@ -230,3 +230,92 @@ wifi reload
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-fix-wifi-power
+
+# ==========================================
+# 9. تخصيص معلومات النظام في واجهة Status (System)
+# ==========================================
+SYS_INCLUDE_JS=$(find feeds/luci -path "*/view/status/include/10_system.js" 2>/dev/null | head -n 1)
+if [ -n "$SYS_INCLUDE_JS" ] && [ -f "$SYS_INCLUDE_JS" ]; then
+    cat << 'EOF' > "$SYS_INCLUDE_JS"
+'use strict';
+'require baseclass';
+'require fs';
+'require rpc';
+'require uci';
+
+var callLuciVersion = rpc.declare({
+	object: 'luci',
+	method: 'getVersion'
+});
+
+var callSystemBoard = rpc.declare({
+	object: 'system',
+	method: 'board'
+});
+
+var callSystemInfo = rpc.declare({
+	object: 'system',
+	method: 'info'
+});
+
+return baseclass.extend({
+	title: _('System'),
+
+	load: function() {
+		return Promise.all([
+			L.resolveDefault(callSystemBoard(), {}),
+			L.resolveDefault(callSystemInfo(), {}),
+			L.resolveDefault(callLuciVersion(), {})
+		]);
+	},
+
+	render: function(data) {
+		var boardinfo   = data[0] || {},
+		    systeminfo  = data[1] || {},
+		    luciversion = (data[2] && data[2].branch) ? data[2].branch + ' ' + (data[2].revision || '') : '';
+
+		var datestr = null;
+		if (systeminfo.localtime) {
+			var date = new Date(systeminfo.localtime * 1000);
+			datestr = '%04d-%02d-%02d %02d:%02d:%02d'.format(
+				date.getUTCFullYear(),
+				date.getUTCMonth() + 1,
+				date.getUTCDate(),
+				date.getUTCHours(),
+				date.getUTCMinutes(),
+				date.getUTCSeconds()
+			);
+		}
+
+		var customTag = 'Ahosam-wifi-770528863';
+
+		var fields = [
+			_('Hostname'),         boardinfo.hostname,
+			_('Model'),            boardinfo.model,
+			_('Architecture'),     customTag,
+			_('Target Platform'),  customTag,
+			_('Firmware Version'), customTag,
+			_('Kernel Version'),   customTag,
+			_('Local Time'),       datestr,
+			_('Uptime'),           systeminfo.uptime ? '%t'.format(systeminfo.uptime) : null,
+			_('Load Average'),     Array.isArray(systeminfo.load) ? '%.2f, %.2f, %.2f'.format(
+				systeminfo.load[0] / 65535.0,
+				systeminfo.load[1] / 65535.0,
+				systeminfo.load[2] / 65535.0
+			) : null
+		];
+
+		var table = E('table', { 'class': 'table' });
+		for (var i = 0; i < fields.length; i += 2) {
+			table.appendChild(E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td left', 'width': '33%' }, [fields[i]]),
+				E('td', { 'class': 'td left' }, [(fields[i + 1] != null) ? fields[i + 1] : '?'])
+			]));
+		}
+
+		return table;
+	}
+});
+EOF
+    echo "✅ تم تخصيص ملف 10_system.js بنجاح."
+fi
