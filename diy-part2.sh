@@ -76,6 +76,10 @@ chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
 # ==========================================
 # 4. دمج خلفية الثيم وتفعيل Argon
 # ==========================================
+if [ -f .config ] && ! grep -q "CONFIG_PACKAGE_luci-theme-argon=" .config; then
+    echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
+fi
+
 mkdir -p package/base-files/files/www/luci-static/argon/background/
 if [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
@@ -90,11 +94,14 @@ sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/modules/luci-base/
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
-uci set luci.main.mediaurlbase='/luci-static/argon'
-uci set argon.@global[0].bing_background=0
-uci set argon.@global[0].mode='normal'
-uci commit luci
-uci commit argon
+if [ -d /www/luci-static/argon ]; then
+    uci set luci.main.mediaurlbase='/luci-static/argon'
+    uci -q set argon.@global[0].bing_background='0'
+    uci -q set argon.@global[0].mode='normal'
+    uci commit luci
+    uci -q commit argon
+    rm -rf /tmp/luci-*
+fi
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
@@ -148,13 +155,17 @@ if [ -f "$DROPBEAR_JS" ]; then
 'use strict';
 'require view';
 'require dom';
+
 return view.extend({
-    render: function() {
-        return E('div', { 'class': 'container' }, [
-            E('h2', {}, _('SSH Access')),
-            E('p', {}, _('SSH configuration is managed strictly via terminal.'))
-        ]);
-    }
+	render: function() {
+		return E('div', { 'class': 'cbi-map' }, [
+			E('h2', {}, _('SSH Access')),
+			E('p', {}, _('SSH configuration is managed strictly via terminal.'))
+		]);
+	},
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
 });
 EOF
 fi
@@ -165,13 +176,17 @@ if [ -f "$SSHKEYS_JS" ]; then
 'use strict';
 'require view';
 'require dom';
+
 return view.extend({
-    render: function() {
-        return E('div', { 'class': 'container' }, [
-            E('h2', {}, _('SSH-Keys')),
-            E('p', {}, _('SSH keys configuration is hidden.'))
-        ]);
-    }
+	render: function() {
+		return E('div', { 'class': 'cbi-map' }, [
+			E('h2', {}, _('SSH-Keys')),
+			E('p', {}, _('SSH keys configuration is hidden.'))
+		]);
+	},
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
 });
 EOF
 fi
