@@ -147,8 +147,29 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 
 # ==========================================
-# 7. إخفاء محتوى صفحات إعدادات SSH والـ Keys من الواجهة نهائياً
+# 7. إزالة تبويبات وصفحات SSH و SSH-Keys و HTTP(S) Access من الواجهة نهائياً
 # ==========================================
+MENU_SYS_JSON="feeds/luci/modules/luci-mod-system/root/usr/share/luci/menu.d/luci-mod-system.json"
+if [ -f "$MENU_SYS_JSON" ]; then
+    awk '
+    /"admin\/system\/admin\/dropbear":/ || /"admin\/system\/admin\/sshkeys":/ || /"admin\/system\/admin\/uhttpd":/ { skip=1; braces=0 }
+    skip {
+        for (i=1; i<=length($0); i++) {
+            c = substr($0, i, 1)
+            if (c == "{") braces++
+            else if (c == "}") braces--
+        }
+        if (braces <= 0 && /}/) skip=0
+        next
+    }
+    { print }
+    ' "$MENU_SYS_JSON" > "$MENU_SYS_JSON.tmp" && mv "$MENU_SYS_JSON.tmp" "$MENU_SYS_JSON"
+
+    # إزالة أي فاصلة زائدة تسبق قوس إغلاق الكائن } لضمان سلامة صياغة JSON
+    sed -i ':a;N;$!ba;s/,\s*\n\s*}/\n}/g' "$MENU_SYS_JSON" 2>/dev/null || true
+    echo "✅ تم حذف تبويبات SSH و SSH-Keys و HTTP(S) Access من قائمة LuCI بنجاح."
+fi
+
 DROPBEAR_JS="feeds/luci/modules/luci-mod-system/htdocs/luci-static/resources/view/system/dropbear.js"
 if [ -f "$DROPBEAR_JS" ]; then
     cat << 'EOF' > "$DROPBEAR_JS"
