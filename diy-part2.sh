@@ -319,3 +319,218 @@ return baseclass.extend({
 EOF
     echo "✅ تم تخصيص ملف 10_system.js بنجاح."
 fi
+
+# ==========================================
+# 10. تبسيط صفحة Backup / Flash Firmware وإبقاء Restore و Flash image فقط
+# ==========================================
+FLASH_JS=$(find feeds/luci -path "*/view/system/flash.js" 2>/dev/null | head -n 1)
+if [ -n "$FLASH_JS" ] && [ -f "$FLASH_JS" ]; then
+    cat << 'EOF' > "$FLASH_JS"
+'use strict';
+'require view';
+'require dom';
+'require fs';
+'require rpc';
+'require ui';
+'require form';
+'require baseclass';
+
+var callSystemValidateFirmwareImage = rpc.declare({
+	object: 'system',
+	method: 'validate_firmware_image',
+	params: [ 'path' ]
+});
+
+function findStorageSize(procmtd, procpart) {
+	var kernsize = 0, rootfsprovsize = 0, efsprovsize = 0, efsvalidsize = 0, rubifs = 0, mtdblocks = {};
+	procmtd.split(/\n/).forEach(function(ln) {
+		var match = ln.match(/^mtd(\d+): [0-9a-fA-F]+ [0-9a-fA-F]+ "(.+?)"$/);
+		if (match) mtdblocks[match[2]] = parseInt(match[1], 10);
+	});
+	if (mtdblocks.hasOwnProperty('kernel') && mtdblocks.hasOwnProperty('rootfs')) {
+		kernsize = parseInt('0x' + (procmtd.match(new RegExp('^mtd' + mtdblocks['kernel'] + ': ([0-9a-fA-F]+)', 'm')) || [0,0])[1], 16);
+		rootfsprovsize = parseInt('0x' + (procmtd.match(new RegExp('^mtd' + mtdblocks['rootfs'] + ': ([0-9a-fA-F]+)', 'm')) || [0,0])[1], 16);
+	}
+	if (mtdblocks.hasOwnProperty('ubi')) {
+		rubifs = parseInt('0x' + (procmtd.match(new RegExp('^mtd' + mtdblocks['ubi'] + ': ([0-9a-fA-F]+)', 'm')) || [0,0])[1], 16);
+	}
+	if (mtdblocks.hasOwnProperty('efs')) {
+		efsprovsize = parseInt('0x' + (procmtd.match(new RegExp('^mtd' + mtdblocks['efs'] + ': ([0-9a-fA-F]+)', 'm')) || [0,0])[1], 16);
+	}
+	if (kernsize > 0 && rootfsprovsize > 0) return kernsize + rootfsprovsize;
+	if (rubifs > 0) return rubifs;
+	if (efsprovsize > 0 && efsvalidsize > 0) return efsprovsize;
+	return 0;
+}
+
+var mapdata = { actions: {}, config: {} };
+var isReadonlyView = false;
+
+return view.extend({
+	load: function() {
+		var tasks = [
+			L.resolveDefault(fs.stat('/lib/upgrade/platform.sh'), {}),
+			fs.trimmed('/proc/sys/kernel/hostname'),
+			fs.trimmed('/proc/mtd'),
+			fs.trimmed('/proc/partitions'),
+			fs.trimmed('/proc/mounts')
+		];
+		return Promise.all(tasks);
+	},
+
+	handleFirstboot: function(ev) {
+		if (!confirm(_('Do you really want to erase all settings?')))
+			return;
+
+		ui.showModal(_('Erasing...'), [
+			E('p', { 'class': 'spinning' }, _('The system is erasing the configuration partition now and will reboot itself when finished.'))
+		]);
+
+		fs.exec('/sbin/firstboot', [ '-r', '-y' ]);
+		ui.awaitReconnect('192.168.1.21', '192.168.1.1', 'openwrt.lan');
+	},
+
+	handleSysupgrade: function(storage_size, has_rootfs_data, ev) {
+		return ui.uploadFile('/tmp/firmware.bin', ev.target.firstChild).then(L.bind(function(btn, reply) {
+			btn.firstChild.data = _('Checking image…');
+			ui.showModal(_('Checking image…'), [
+				E('span', { 'class': 'spinning' }, _('Verifying the uploaded image file.'))
+			]);
+			return callSystemValidateFirmwareImage('/tmp/firmware.bin').then(function(res) {
+				return [ reply, res ];
+			});
+		}, this, ev.target)).then(L.bind(function(btn, reply) {
+			return fs.exec('/sbin/sysupgrade', [ '--test', '/tmp/firmware.bin' ]).then(function(res) {
+				reply.push(res);
+				return reply;
+			});
+		}, this, ev.target)).then(L.bind(function(btn, res) {
+			var opts = {
+				keep: [ E('input', { type: 'checkbox' }), false, '-n' ],
+				force: [ E('input', { type: 'checkbox' }), true, '--force' ],
+				skip_orig: [ E('input', { type: 'checkbox' }), true, '-u' ],
+				backup_pkgs: [ E('input', { type: 'checkbox' }), true, '-k' ]
+			},
+			is_valid = res[1].valid,
+			is_forceable = res[1].forceable,
+			allow_backup = res[1].allow_backup,
+			is_too_big = (storage_size > 0 && res[0].size > storage_size),
+			body = [];
+
+			body.push(E('p', _("The flash image was uploaded. Below is the checksum and file size listed, compare them with the original file to ensure data integrity. <br /> Click 'Continue' below to start the flash procedure.")));
+			body.push(E('ul', {}, [
+				res[0].size ? E('li', {}, '%s: %1024.2mB'.format(_('Size'), res[0].size)) : '',
+				res[0].checksum ? E('li', {}, '%s: %s'.format(_('MD5'), res[0].checksum)) : '',
+				res[0].sha256sum ? E('li', {}, '%s: %s'.format(_('SHA256'), res[0].sha256sum)) : ''
+			]));
+			body.push(E('p', {}, E('label', { 'class': 'btn' }, [
+				opts.keep[0], ' ', _('Keep settings and retain the current configuration')
+			])));
+
+			if (!is_valid || is_too_big) {
+				body.push(E('p', { 'class': 'alert-message' }, [
+					res[2].stderr ? res[2].stderr : '',
+					res[2].stderr ? E('br') : '',
+					_('The uploaded image file does not contain a supported format. Make sure that you choose the generic image format for your platform.')
+				]));
+			}
+
+			if (!allow_backup) {
+				body.push(E('p', { 'class': 'alert-message' }, [
+					_('The uploaded firmware does not allow keeping current configuration.')
+				]));
+				opts.keep[0].disabled = true;
+			} else {
+				opts.keep[0].checked = true;
+				if (has_rootfs_data) {
+					body.push(E('p', {}, E('label', { 'class': 'btn' }, [
+						opts.skip_orig[0], ' ', _('Skip from backup files that are equal to those in /rom')
+					])));
+				}
+			}
+
+			ui.showModal(_('Flash image?'), body.concat([
+				E('div', { 'class': 'right' }, [
+					E('button', {
+						'class': 'btn',
+						'click': ui.createHandlerFn(this, function(ev) {
+							return fs.remove('/tmp/firmware.bin').finally(ui.hideModal);
+						})
+					}, [ _('Cancel') ]),
+					' ',
+					E('button', {
+						'class': 'btn cbi-button-action important',
+						'click': ui.createHandlerFn(this, function(ev) {
+							var args = [ '/tmp/firmware.bin' ];
+							if (!opts.keep[0].checked) args.unshift('-n');
+							if (opts.force[0].checked) args.unshift('--force');
+							if (opts.skip_orig[0].checked && opts.keep[0].checked) args.unshift('-u');
+							ui.showModal(_('Flashing...'), [
+								E('p', { 'class': 'spinning' }, _('The system is flashing the new firmware image now. Do not power off the device!'))
+							]);
+							fs.exec('/sbin/sysupgrade', args);
+							ui.awaitReconnect('192.168.1.21', '192.168.1.1', 'openwrt.lan');
+						})
+					}, [ _('Continue') ])
+				])
+			]));
+		}, this, ev.target)).catch(function(e) {
+			ui.addNotification(null, E('p', e.message));
+		}).finally(L.bind(function(btn) {
+			btn.firstChild.data = _('Flash image...');
+		}, this, ev.target));
+	},
+
+	render: function(rpc_replies) {
+		var has_sysupgrade = (rpc_replies[0].type == 'file'),
+		    procmtd = rpc_replies[2] || '',
+		    procpart = rpc_replies[3] || '',
+		    procmounts = rpc_replies[4] || '',
+		    has_rootfs_data = (procmtd.match(/"rootfs_data"/) != null) || (procmounts.match("overlayfs:\\/overlay \\/ ") != null),
+		    storage_size = findStorageSize(procmtd, procpart),
+		    m, s, o, ss;
+
+		m = new form.JSONMap(mapdata, _('Flash operations'));
+		m.tabbed = true;
+		m.readonly = isReadonlyView;
+
+		s = m.section(form.NamedSection, 'actions', _('Actions'));
+
+		o = s.option(
+			form.SectionValue, 'actions', form.NamedSection, 'actions', 'actions',
+			_('Restore'),
+			_('To restore configuration files, you can upload a previously generated backup archive here. To reset the firmware to its initial state, click "Perform reset" (only possible with squashfs images).')
+		);
+		ss = o.subsection;
+		if (has_rootfs_data) {
+			o = ss.option(form.Button, 'reset', _('Reset to defaults'));
+			o.inputstyle = 'negative important';
+			o.inputtitle = _('Perform reset');
+			o.onclick = this.handleFirstboot;
+		}
+
+		o = s.option(
+			form.SectionValue, 'actions', form.NamedSection, 'actions', 'actions',
+			_('Flash new firmware image'),
+			has_sysupgrade
+				? _('Upload a sysupgrade-compatible image here to replace the running firmware.')
+				: _('Sorry, there is no sysupgrade support present; a new firmware image must be flashed manually. Please refer to the wiki for device specific install instructions.')
+		);
+		ss = o.subsection;
+		if (has_sysupgrade) {
+			o = ss.option(form.Button, 'sysupgrade', _('Image'));
+			o.inputstyle = 'action important';
+			o.inputtitle = _('Flash image...');
+			o.onclick = L.bind(this.handleSysupgrade, this, storage_size, has_rootfs_data);
+		}
+
+		return m.render();
+	},
+
+	handleSaveApply: null,
+	handleSave: null,
+	handleReset: null
+});
+EOF
+    echo "✅ تم تخصيص ملف flash.js بنجاح."
+fi
