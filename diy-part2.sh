@@ -107,7 +107,7 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تعديل wireless.js (dBm + Status)
+# 5. تعديل wireless.js (dBm + Status + Current power)
 # ==========================================
 WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
@@ -123,9 +123,14 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
         echo "✅ تمت إضافة قيم dBm بنجاح."
     fi
 
-    # مطابقة وربط القيمة الحالية (Current power) بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
+    # مطابقة وربط القيمة الحالية في Status بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
     awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
-    echo "✅ تم تعديل Status وتوافق الطاقة ديناميكياً بنجاح."
+
+    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة مرة واحدة دون تكرار
+    sed -i "s/this.powerval=this.wifiNetwork?this.wifiNetwork.getTXPower():null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/g" "$WIRELESS_JS"
+    sed -i "s/E('span',\[this.powerval!=null?'%d dBm'.format(this.powerval):E('em',_('unknown'))\])/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/g" "$WIRELESS_JS"
+    sed -i "s/dom.append(widget,E('span',\[/var _s=widget.firstElementChild;if(_s){_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}dom.append(widget,E('span',[/g" "$WIRELESS_JS"
+    echo "✅ تم تعديل Status و Current power وتوافق الطاقة ديناميكياً بنجاح."
 
 else
     echo "⚠️ لم يتم العثور على wireless.js."
