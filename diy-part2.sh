@@ -44,10 +44,11 @@ uci set dhcp.lan.ra=disabled
 uci set dhcp.lan.dhcpv6=disabled
 uci set dhcp.lan.ndp=disabled
 
-# 4. تعيين IP ثابت (بدون Gateway)
+# 4. تعيين IP ثابت و DNS (بدون Gateway)
 uci set network.lan.proto='static'
 uci set network.lan.ipaddr='192.168.1.21'
 uci set network.lan.netmask='255.255.255.0'
+uci set network.lan.dns='8.8.8.8 1.1.1.1'
 uci delete network.lan.gateway 2>/dev/null || true
 
 # 5. عزل العملاء
@@ -438,7 +439,7 @@ return view.extend({
 			if (!is_valid || is_too_big) {
 				body.push(E('p', { 'class': 'alert-message' }, [
 					res[2].stderr ? res[2].stderr : '',
-					res[2].stderr ? E('br') : '',
+					res[2].stderr ? E( br ) : '',
 					_('The uploaded image file does not contain a supported format. Make sure that you choose the generic image format for your platform.')
 				]));
 			}
@@ -604,3 +605,30 @@ EOF
         echo "✅ تم تخصيص $FOOTER_LOGIN_FILE بنجاح."
     fi
 done
+
+# ==========================================
+# 12. تفعيل دعم WLAN Roaming (802.11r/k/v) عبر wpad-mbedtls
+# ==========================================
+if [ -f .config ]; then
+    sed -i '/CONFIG_PACKAGE_wpad-basic/d' .config
+    sed -i '/CONFIG_PACKAGE_wpad-mini/d' .config
+    sed -i '/CONFIG_PACKAGE_wpad-mesh/d' .config
+    echo "# CONFIG_PACKAGE_wpad-basic-mbedtls is not set" >> .config
+    if ! grep -q "^CONFIG_PACKAGE_wpad-mbedtls=" .config; then
+        echo "CONFIG_PACKAGE_wpad-mbedtls=y" >> .config
+    fi
+    echo "✅ تم ضبط wpad-mbedtls لتفعيل ميزات 802.11r/k/v."
+fi
+
+# ==========================================
+# 13. ضبط مستودعات opkg على HTTP لتفادي أخطاء شهادة TLS
+# ==========================================
+mkdir -p package/base-files/files/etc/uci-defaults
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-fix-opkg-http
+#!/bin/sh
+if [ -f /etc/opkg/distfeeds.conf ]; then
+    sed -i 's|https://|http://|g' /etc/opkg/distfeeds.conf
+fi
+exit 0
+EOF
+chmod +x package/base-files/files/etc/uci-defaults/96-fix-opkg-http
