@@ -149,10 +149,10 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     # مطابقة وربط القيمة الحالية في Status بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
     awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
 
-    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة بأسلوب sed المباشر
-    sed -i "s/this\.powerval=this\.wifiNetwork?this\.wifiNetwork\.getTXPower():null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/" "$WIRELESS_JS"
-    sed -i "s/E('span',\[this\.powerval!=null?'%d dBm'\.format(this\.powerval):E('em',_('unknown'))\])/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/" "$WIRELESS_JS"
-    sed -i "s/widget\.firstElementChild\.style\.width='auto';/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/" "$WIRELESS_JS"
+    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة (يدعم الصياغة غير المضغوطة والمضغوطة)
+    sed -i -E "s/this\.powerval\s*=\s*this\.wifiNetwork\s*\?\s*this\.wifiNetwork\.getTXPower\(\)\s*:\s*null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/g" "$WIRELESS_JS"
+    sed -i -E "s/E\('span',\s*\[\s*this\.powerval\s*!=\s*null\s*\?\s*'%d dBm'\.format\(this\.powerval\)\s*:\s*E\('em',\s*_\('unknown'\)\)\s*\]\)/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/g" "$WIRELESS_JS"
+    sed -i -E "s/widget\.firstElementChild\.style\.width\s*=\s*'auto';/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/g" "$WIRELESS_JS"
 
     # إظهار خيار 160 MHz في قائمة Width لأنماط AC و AX
     sed -i 's/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g' "$WIRELESS_JS"
