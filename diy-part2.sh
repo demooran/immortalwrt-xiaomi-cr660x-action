@@ -25,7 +25,7 @@ if [ -f "$WIFI_FILE" ]; then
 fi
 
 # ==========================================
-# 3. إعدادات وضع الـ Access Point والجسر br-lan
+# 3. إعدادات وضع الـ Access Point والجسر br-lan وتمرير VLAN مثل 110
 # ==========================================
 mkdir -p package/base-files/files/etc/uci-defaults
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-set-ap-mode
@@ -78,12 +78,23 @@ for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d'.' -f2 | cut
     fi
 done
 
+# 8. تفعيل وضع promisc على br-lan و eth0 لضمان عدم إسقاط إطارات VLAN في MT7530 DSA
+ip link set dev br-lan promisc on 2>/dev/null || true
+ip link set dev eth0 promisc on 2>/dev/null || true
+
 uci commit dhcp
 uci commit network
 uci commit wireless
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
+
+# ضمان بقاء promisc مفعلاً على br-lan و eth0 عند إقلاع الشبكة
+if [ -f package/base-files/files/etc/rc.local ]; then
+    if ! grep -q "promisc on" package/base-files/files/etc/rc.local; then
+        sed -i '/exit 0/i ip link set dev br-lan promisc on 2>/dev/null || true\nip link set dev eth0 promisc on 2>/dev/null || true' package/base-files/files/etc/rc.local
+    fi
+fi
 
 # ==========================================
 # 4. دمج خلفية الثيم وتفعيل Argon
@@ -138,10 +149,10 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     # مطابقة وربط القيمة الحالية في Status بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
     awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
 
-    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة مرة واحدة دون تكرار
-    sed -i "s/this.powerval=this.wifiNetwork?this.wifiNetwork.getTXPower():null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/g" "$WIRELESS_JS"
-    sed -i "s/E('span',\[this.powerval!=null?'%d dBm'.format(this.powerval):E('em',_('unknown'))\])/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/g" "$WIRELESS_JS"
-    sed -i "s/dom.append(widget,E('span',\[/var _s=widget.firstElementChild;if(_s){_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}dom.append(widget,E('span',[/g" "$WIRELESS_JS"
+    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة بأسلوب sed المباشر
+    sed -i "s/this\.powerval=this\.wifiNetwork?this\.wifiNetwork\.getTXPower():null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/" "$WIRELESS_JS"
+    sed -i "s/E('span',\[this\.powerval!=null?'%d dBm'\.format(this\.powerval):E('em',_('unknown'))\])/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/" "$WIRELESS_JS"
+    sed -i "s/widget\.firstElementChild\.style\.width='auto';/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/" "$WIRELESS_JS"
 
     # إظهار خيار 160 MHz في قائمة Width لأنماط AC و AX
     sed -i 's/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g' "$WIRELESS_JS"
@@ -645,9 +656,16 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/96-fix-opkg-http
 
 # ==========================================
-# 14. إخفاء تبويب Software وتبويب Argon Config من قائمة System
+# 14. إخفاء تبويب Argon Config وتبويب Software من قائمة LuCI نهائياً
 # ==========================================
-for MENU_FILE in $(find feeds/luci -path "*/root/usr/share/luci/menu.d/*.json" 2>/dev/null); do
+for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*.json" 2>/dev/null); do
+    case "$(basename "$MENU_FILE")" in
+        *argon*config*.json|*opkg*.json|*packages*.json)
+            rm -f "$MENU_FILE"
+            echo "✅ تم حذف ملف قائمة: $MENU_FILE"
+            continue
+            ;;
+    esac
     if grep -qE '"admin/system/opkg"|"admin/system/packages"|"admin/system/argon"|"admin/system/argon-config"' "$MENU_FILE"; then
         awk '
         /"admin\/system\/opkg":/ || /"admin\/system\/packages":/ || /"admin\/system\/argon":/ || /"admin\/system\/argon-config":/ { skip=1; braces=0 }
@@ -663,8 +681,7 @@ for MENU_FILE in $(find feeds/luci -path "*/root/usr/share/luci/menu.d/*.json" 2
         { print }
         ' "$MENU_FILE" > "$MENU_FILE.tmp" && mv "$MENU_FILE.tmp" "$MENU_FILE"
 
-        # إزالة أي فاصلة زائدة تسبق قوس إغلاق الكائن } لضمان سلامة صياغة JSON
         sed -i ':a;N;$!ba;s/,\s*\n\s*}/\n}/g' "$MENU_FILE" 2>/dev/null || true
-        echo "✅ تم إخفاء Software و Argon Config من: $MENU_FILE"
+        echo "✅ تم إخفاء العناصر المستهدفة من: $MENU_FILE"
     fi
 done
