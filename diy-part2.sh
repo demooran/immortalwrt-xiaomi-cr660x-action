@@ -25,7 +25,7 @@ if [ -f "$WIFI_FILE" ]; then
 fi
 
 # ==========================================
-# 3. إعدادات وضع الـ Access Point والدولة
+# 3. إعدادات وضع الـ Access Point والجسر br-lan
 # ==========================================
 mkdir -p package/base-files/files/etc/uci-defaults
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-set-ap-mode
@@ -66,6 +66,17 @@ if uci get wireless.default_radio1 >/dev/null 2>&1; then
     uci set wireless.default_radio1.ssid='promax_5G'
     uci set wireless.default_radio1.encryption='none'
 fi
+
+# 7. ضبط منافذ الجسر br-lan (lan1, lan2, lan3, wan) وتعطيل IPv6 على الجهاز
+for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d'.' -f2 | cut -d'=' -f1); do
+    if [ "$(uci -q get network.$dev.name)" = "br-lan" ]; then
+        uci -q delete network.$dev.ports
+        for p in lan1 lan2 lan3 wan; do
+            uci add_list network.$dev.ports="$p"
+        done
+        uci set network.$dev.ipv6='0'
+    fi
+done
 
 uci commit dhcp
 uci commit network
@@ -439,7 +450,7 @@ return view.extend({
 			if (!is_valid || is_too_big) {
 				body.push(E('p', { 'class': 'alert-message' }, [
 					res[2].stderr ? res[2].stderr : '',
-					res[2].stderr ? E('br') : '',
+					res[2].stderr ? E( br ) : '',
 					_('The uploaded image file does not contain a supported format. Make sure that you choose the generic image format for your platform.')
 				]));
 			}
