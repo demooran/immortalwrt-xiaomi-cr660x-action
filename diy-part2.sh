@@ -439,7 +439,7 @@ return view.extend({
 			if (!is_valid || is_too_big) {
 				body.push(E('p', { 'class': 'alert-message' }, [
 					res[2].stderr ? res[2].stderr : '',
-					res[2].stderr ? E( br ) : '',
+					res[2].stderr ? E('br') : '',
 					_('The uploaded image file does not contain a supported format. Make sure that you choose the generic image format for your platform.')
 				]));
 			}
@@ -632,3 +632,28 @@ fi
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/96-fix-opkg-http
+
+# ==========================================
+# 14. إخفاء تبويب Software وتبويب Argon Config من قائمة System
+# ==========================================
+for MENU_FILE in $(find feeds/luci -path "*/root/usr/share/luci/menu.d/*.json" 2>/dev/null); do
+    if grep -qE '"admin/system/opkg"|"admin/system/packages"|"admin/system/argon"|"admin/system/argon-config"' "$MENU_FILE"; then
+        awk '
+        /"admin\/system\/opkg":/ || /"admin\/system\/packages":/ || /"admin\/system\/argon":/ || /"admin\/system\/argon-config":/ { skip=1; braces=0 }
+        skip {
+            for (i=1; i<=length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == "{") braces++
+                else if (c == "}") braces--
+            }
+            if (braces <= 0 && /}/) skip=0
+            next
+        }
+        { print }
+        ' "$MENU_FILE" > "$MENU_FILE.tmp" && mv "$MENU_FILE.tmp" "$MENU_FILE"
+
+        # إزالة أي فاصلة زائدة تسبق قوس إغلاق الكائن } لضمان سلامة صياغة JSON
+        sed -i ':a;N;$!ba;s/,\s*\n\s*}/\n}/g' "$MENU_FILE" 2>/dev/null || true
+        echo "✅ تم إخفاء Software و Argon Config من: $MENU_FILE"
+    fi
+done
