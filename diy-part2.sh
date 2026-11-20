@@ -534,3 +534,65 @@ return view.extend({
 EOF
     echo "✅ تم تخصيص ملف flash.js بنجاح."
 fi
+
+# ==========================================
+# 11. تخصيص الفوتر (Footer) لثيم Argon باللون الأزرق مع الحفاظ على القوائم والسكربتات
+# ==========================================
+for FOOTER_FILE in \
+    "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer.ut" \
+    "package/luci-theme-argon/ucode/template/themes/argon/footer.ut"
+do
+    if [ -f "$FOOTER_FILE" ]; then
+        cat << 'EOF' > "$FOOTER_FILE"
+{#
+        Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material Argon Template
+        luci-theme-argon
+        Copyright 2020 Jerrykuku <jerrykuku@qq.com>
+        Have a bug? Please create an issue here on GitHub!
+        https://github.com/jerrykuku/luci-theme-argon/issues
+        luci-theme-material:
+        Copyright 2015 Lutty Yang <lutty@wcan.in>
+        Agron Theme
+        https://demos.creative-tim.com/argon-dashboard/index.html
+        Licensed to the public under the Apache License 2.0
+-#}
+                </div>
+                <footer class="mobile-hide" style="text-wrap: auto">
+                        <div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
+                                <span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-WIFI | 770528863 : للتواصل</span>
+                                <ul class="breadcrumb pull-right" id="modemenu" style="display:none"></ul>
+                        </div>
+                </footer>
+        </main>
+</div>
+</div>
+{% include('themes/' + theme + '/page_scripts', { is_login: false }) %}
+</body>
+</html>
+EOF
+        echo "✅ تم تخصيص $FOOTER_FILE بنجاح."
+    fi
+done
+
+for FOOTER_LOGIN_FILE in \
+    "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer_login.ut" \
+    "package/luci-theme-argon/ucode/template/themes/argon/footer_login.ut"
+do
+    if [ -f "$FOOTER_LOGIN_FILE" ]; then
+        cat << 'EOF' > "$FOOTER_LOGIN_FILE"
+<footer class="login-footer">
+        <div class="container">
+                <div class="row">
+                        <div class="col-lg-12 text-center">
+                                <span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-WIFI | 770528863 : للتواصل</span>
+                        </div>
+                </div>
+        </div>
+</footer>
+{% include('themes/' + theme + '/page_scripts', { is_login: true }) %}
+</body>
+</html>
+EOF
+        echo "✅ تم تخصيص $FOOTER_LOGIN_FILE بنجاح."
+    fi
+done
