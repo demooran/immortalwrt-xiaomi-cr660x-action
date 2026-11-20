@@ -73,29 +73,29 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    # --- هذه الخطوة تنقل ملف .config إلى مجلد openwrt فقط ---
+    # --- نقل ملف .config وملفات التخصيص إلى مجلد openwrt ---
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
 
-    - name: Download package
-      id: package
-      run: |
-        cd openwrt
-        make defconfig
-        echo "=======看看实际修改了哪些配置======="
-        ./scripts/diffconfig.sh
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
-
-    # --- هنا نطبق تعديلات diy-part2.sh بعد make defconfig ---
+    # --- تطبيق تعديلات diy-part2.sh ثم إعادة ضبط التبعيات عبر make defconfig ---
     - name: Apply custom modifications (diy-part2.sh)
       run: |
         cd openwrt
         chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH
         $GITHUB_WORKSPACE/$DIY_P2_SH
+        make defconfig
+        echo "======= Actual modified config ======="
+        ./scripts/diffconfig.sh
+
+    - name: Download package
+      id: package
+      run: |
+        cd openwrt
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     - name: Compile the firmware
       id: compile
@@ -109,7 +109,7 @@ jobs:
         echo "status=success" >> "$GITHUB_OUTPUT"
 
         awk -F 'DEVICE_' '/^CONFIG_TARGET.*DEVICE.*=y$/ {
-          split($2,a,"=")
+          split($2, a, "=")
           print a[1]
         }' .config > DEVICE_NAME
 
