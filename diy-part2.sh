@@ -709,3 +709,93 @@ EOF
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_backup.tar.gz في المستودع."
 fi
+
+# ==========================================
+# 16. تسلسل إضاءة LEDs عند الإقلاع والاستقرار على الأزرق
+# ==========================================
+mkdir -p package/base-files/files/usr/bin
+cat << 'EOF' > package/base-files/files/usr/bin/promax-led-boot.sh
+#!/bin/sh
+
+LED_Y1="yellow:sys"
+LED_Y2="yellow:net"
+LED_B1="blue:sys"
+LED_B2="blue:net"
+
+max_val() {
+    local led="$1"
+    if [ -f "/sys/class/leds/$led/max_brightness" ]; then
+        cat "/sys/class/leds/$led/max_brightness"
+    else
+        echo 255
+    fi
+}
+
+set_led() {
+    local led="$1"
+    local trig="$2"
+    local val="$3"
+    [ -d "/sys/class/leds/$led" ] || return 0
+    if [ -n "$trig" ] && [ -f "/sys/class/leds/$led/trigger" ]; then
+        echo "$trig" > "/sys/class/leds/$led/trigger" 2>/dev/null || true
+    fi
+    if [ -n "$val" ] && [ -f "/sys/class/leds/$led/brightness" ]; then
+        echo "$val" > "/sys/class/leds/$led/brightness" 2>/dev/null || true
+    fi
+}
+
+(
+    sleep 3
+    VY1=$(max_val "$LED_Y1")
+    VY2=$(max_val "$LED_Y2")
+    VB1=$(max_val "$LED_B1")
+
+    # إطفاء الكل مبدئياً
+    set_led "$LED_B1" "none" 0
+    set_led "$LED_B2" "none" 0
+    set_led "$LED_Y1" "none" 0
+    set_led "$LED_Y2" "none" 0
+
+    # 1. تشغيل لمبة برتقالية/صفراء واحدة فقط
+    set_led "$LED_Y1" "none" "$VY1"
+    sleep 3
+
+    # 2. وميض اللمبتين البرتقاليتين/الصفراوين معاً
+    set_led "$LED_Y1" "none" 0
+    set_led "$LED_Y2" "none" 0
+    i=0
+    while [ $i -lt 8 ]; do
+        echo "$VY1" > "/sys/class/leds/$LED_Y1/brightness" 2>/dev/null || true
+        echo "$VY2" > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
+        sleep 0.35
+        echo 0 > "/sys/class/leds/$LED_Y1/brightness" 2>/dev/null || true
+        echo 0 > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
+        sleep 0.35
+        i=$((i + 1))
+    done
+
+    # 3. الاستقرار: إطفاء البرتقالي وتثبيت اللمبة الزرقاء
+    set_led "$LED_Y1" "none" 0
+    set_led "$LED_Y2" "none" 0
+    set_led "$LED_B1" "default-on" "$VB1"
+    if [ ! -f "/sys/class/leds/$LED_B1/trigger" ]; then
+        echo "$VB1" > "/sys/class/leds/$LED_B1/brightness" 2>/dev/null || true
+    fi
+) >/dev/null 2>&1 &
+exit 0
+EOF
+chmod +x package/base-files/files/usr/bin/promax-led-boot.sh
+
+mkdir -p package/base-files/files/etc
+if [ -f package/base-files/files/etc/rc.local ]; then
+    if ! grep -q "promax-led-boot.sh" package/base-files/files/etc/rc.local; then
+        sed -i '/exit 0/i /usr/bin/promax-led-boot.sh' package/base-files/files/etc/rc.local
+    fi
+else
+    cat << 'EOF' > package/base-files/files/etc/rc.local
+/usr/bin/promax-led-boot.sh
+exit 0
+EOF
+    chmod +x package/base-files/files/etc/rc.local
+fi
+echo "✅ تم إعداد تسلسل LEDs عند الإقلاع بنجاح."
