@@ -97,7 +97,7 @@ if [ -f package/base-files/files/etc/rc.local ]; then
 fi
 
 # ==========================================
-# 4. دمج خلفية الثيم وتفعيل Argon
+# 4. دمج خلفية الثيم وشعار argon.svg وتفعيل Argon
 # ==========================================
 if [ -f .config ] && ! grep -q "CONFIG_PACKAGE_luci-theme-argon=" .config; then
     echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
@@ -111,12 +111,31 @@ else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
 fi
 
+mkdir -p package/base-files/files/www/luci-static/argon/img/
+if [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
+    cp -f "$GITHUB_WORKSPACE/argon.svg" package/base-files/files/www/luci-static/argon/img/argon.svg
+    chmod 0644 package/base-files/files/www/luci-static/argon/img/argon.svg
+    for ARGON_IMG_DIR in \
+        "feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img" \
+        "package/luci-theme-argon/htdocs/luci-static/argon/img"
+    do
+        if [ -d "$ARGON_IMG_DIR" ]; then
+            cp -f "$GITHUB_WORKSPACE/argon.svg" "$ARGON_IMG_DIR/argon.svg"
+            chmod 0644 "$ARGON_IMG_DIR/argon.svg"
+        fi
+    done
+    echo "✅ تم دمج شعار argon.svg بنجاح."
+else
+    echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في المستودع."
+fi
+
 # جعل الثيم الافتراضي هو Argon حصرياً
 sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/modules/luci-base/Makefile 2>/dev/null || true
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
+chmod 0644 /www/luci-static/argon/img/argon.svg 2>/dev/null || true
 if [ -d /www/luci-static/argon ]; then
     uci set luci.main.mediaurlbase='/luci-static/argon'
     uci -q set argon.@global[0].bing_background='0'
@@ -692,13 +711,19 @@ done
 mkdir -p package/base-files/files
 if [ -f "$GITHUB_WORKSPACE/quicksetup_module_pack.tar.gz" ]; then
     tar -xzf "$GITHUB_WORKSPACE/quicksetup_module_pack.tar.gz" -C package/base-files/files/
-    chmod +x package/base-files/files/usr/sbin/quicksetup-apply 2>/dev/null || true
-    chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
+    find package/base-files/files/www/luci-static/resources/view/Quicksetup -type d -exec chmod 0755 {} + 2>/dev/null || true
+    find package/base-files/files/www/luci-static/resources/view/Quicksetup -type f -exec chmod 0644 {} + 2>/dev/null || true
+    chmod 0644 package/base-files/files/usr/share/luci/menu.d/luci-app-quicksetup.json 2>/dev/null || true
+    chmod 0755 package/base-files/files/usr/sbin/quicksetup-apply 2>/dev/null || true
+    chmod 0755 package/base-files/files/etc/init.d/wizard 2>/dev/null || true
 
     mkdir -p package/base-files/files/etc/uci-defaults
     cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
 #!/bin/sh
-chmod +x /usr/sbin/quicksetup-apply 2>/dev/null || true
+chmod 0755 /www /www/luci-static /www/luci-static/resources /www/luci-static/resources/view /www/luci-static/resources/view/Quicksetup 2>/dev/null || true
+chmod 0644 /www/luci-static/resources/view/Quicksetup/* 2>/dev/null || true
+chmod 0644 /usr/share/luci/menu.d/luci-app-quicksetup.json 2>/dev/null || true
+chmod 0755 /usr/sbin/quicksetup-apply 2>/dev/null || true
 if [ -x /etc/init.d/wizard ]; then
     /etc/init.d/wizard enable 2>/dev/null || true
     /etc/init.d/wizard start 2>/dev/null || true
