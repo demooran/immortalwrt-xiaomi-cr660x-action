@@ -13,8 +13,8 @@
 # ==========================================
 # 1. تعيين اسم الجهاز (Hostname)
 # ==========================================
-sed -i 's/OpenWrt/PROMAX/g' package/base-files/files/bin/config_generate
-sed -i 's/ImmortalWrt/PROMAX/g' package/base-files/files/bin/config_generate
+sed -i 's/OpenWrt/hossam.AX/g' package/base-files/files/bin/config_generate
+sed -i 's/ImmortalWrt/hossam.AX/g' package/base-files/files/bin/config_generate
 
 # ==========================================
 # 2. إعدادات الواي فاي الافتراضية (تفعيل الراديو)
@@ -46,7 +46,7 @@ uci set dhcp.lan.ndp=disabled
 
 # 4. تعيين IP ثابت و DNS (بدون Gateway)
 uci set network.lan.proto='static'
-uci set network.lan.ipaddr='192.168.1.21'
+uci set network.lan.ipaddr='192.168.1.20'
 uci set network.lan.netmask='255.255.255.0'
 uci set network.lan.dns='8.8.8.8 1.1.1.1'
 uci delete network.lan.gateway 2>/dev/null || true
@@ -60,10 +60,10 @@ if uci get wireless.default_radio1 >/dev/null 2>&1; then
 fi
 
 # 6. تعيين SSID
-uci set wireless.default_radio0.ssid='promax'
+uci set wireless.default_radio0.ssid='hossam-WIFI06@'
 uci set wireless.default_radio0.encryption='none'
 if uci get wireless.default_radio1 >/dev/null 2>&1; then
-    uci set wireless.default_radio1.ssid='promax_5G'
+    uci set wireless.default_radio1.ssid='hossam-WIFI06@5G'
     uci set wireless.default_radio1.encryption='none'
 fi
 
