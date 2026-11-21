@@ -68,7 +68,7 @@ if uci get wireless.default_radio1 >/dev/null 2>&1; then
 fi
 
 # 7. ضبط منافذ الجسر br-lan (lan1, lan2, lan3, wan) وتعطيل IPv6 على الجهاز
-for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d'.' -f2 | cut -d'=' -f1); do
+for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d '.' -f2 | cut -d '=' -f1); do
     if [ "$(uci -q get network.$dev.name)" = "br-lan" ]; then
         uci -q delete network.$dev.ports
         for p in lan1 lan2 lan3 wan; do
@@ -151,8 +151,8 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
 
     # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة (يدعم الصياغة غير المضغوطة والمضغوطة)
     sed -i -E "s/this\.powerval\s*=\s*this\.wifiNetwork\s*\?\s*this\.wifiNetwork\.getTXPower\(\)\s*:\s*null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/g" "$WIRELESS_JS"
-    sed -i -E "s/E\('span',\s*\[\s*this\.powerval\s*!=\s*null\s*\?\s*'%d dBm'\.format\(this\.powerval\)\s*:\s*E\('em',\s*_\('unknown'\)\)\s*\]\)/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/g" "$WIRELESS_JS"
-    sed -i -E "s/widget\.firstElementChild\.style\.width\s*=\s*'auto';/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/g" "$WIRELESS_JS"
+    sed -i -E "s/E\( span ,\s*\[\s*this\.powerval\s*!=\s*null\s*\?\s* %d dBm \.format\(this\.powerval\)\s*:\s*E\( em ,\s*_\( unknown \)\)\s*\]\)/E('span',{class:'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/g" "$WIRELESS_JS"
+    sed -i -E "s/widget\.firstElementChild\.style\.width\s*=\s* auto ;/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/g" "$WIRELESS_JS"
 
     # إظهار خيار 160 MHz في قائمة Width لأنماط AC و AX
     sed -i 's/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g' "$WIRELESS_JS"
@@ -687,16 +687,18 @@ for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*
 done
 
 # ==========================================
-# 15. دمج إضافة quicksetup_backup.tar.gz داخل الفيرموير
+# 15. دمج إضافة quicksetup_module_pack.tar.gz داخل الفيرموير
 # ==========================================
 mkdir -p package/base-files/files
-if [ -f "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" ]; then
-    tar -xzf "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" -C package/base-files/files/
+if [ -f "$GITHUB_WORKSPACE/quicksetup_module_pack.tar.gz" ]; then
+    tar -xzf "$GITHUB_WORKSPACE/quicksetup_module_pack.tar.gz" -C package/base-files/files/
+    chmod +x package/base-files/files/usr/sbin/quicksetup-apply 2>/dev/null || true
     chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
 
     mkdir -p package/base-files/files/etc/uci-defaults
     cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
 #!/bin/sh
+chmod +x /usr/sbin/quicksetup-apply 2>/dev/null || true
 if [ -x /etc/init.d/wizard ]; then
     /etc/init.d/wizard enable 2>/dev/null || true
     /etc/init.d/wizard start 2>/dev/null || true
@@ -707,7 +709,7 @@ EOF
     chmod +x package/base-files/files/etc/uci-defaults/95-enable-quicksetup
     echo "✅ تم دمج إضافة quicksetup وتفعيل خدمة wizard بنجاح."
 else
-    echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_backup.tar.gz في المستودع."
+    echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_module_pack.tar.gz في المستودع."
 fi
 
 # ==========================================
