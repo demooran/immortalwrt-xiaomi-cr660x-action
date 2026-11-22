@@ -106,7 +106,7 @@ EOF
 fi
 
 # ==========================================
-# 4. دمج حزمة luci-theme-argon_2.2.9-20211016-1_all.ipk والخلفية وتفعيل Argon
+# 4. دمج حزمة luci-theme-argon_2.2.9-20211016-1_all.ipk والخلفية والشعار وتفعيل Argon
 # ==========================================
 # إزالة أي مرجع لحزمة luci-theme-argon من .config حتى لا يطلبها من الـ feeds
 if [ -f .config ]; then
@@ -141,19 +141,36 @@ if [ -n "$ARGON_IPK" ]; then
         tar -xf "$TMP_ARGON_DIR/data.tar" -C package/base-files/files/
     fi
 
-    # تنفيذ سكربت postinst إن وجد داخل control.tar.* لضبط أي روابط أو صلاحيات
-    if [ -f "$TMP_ARGON_DIR/control.tar.gz" ]; then
-        mkdir -p "$TMP_ARGON_DIR/ctrl"
-        tar -xzf "$TMP_ARGON_DIR/control.tar.gz" -C "$TMP_ARGON_DIR/ctrl" 2>/dev/null || true
-        if [ -f "$TMP_ARGON_DIR/ctrl/postinst" ]; then
-            sed -i 's|/etc/init.d/|package/base-files/files/etc/init.d/|g; s|/usr/|package/base-files/files/usr/|g' "$TMP_ARGON_DIR/ctrl/postinst" 2>/dev/null || true
-        fi
-    fi
-
     rm -rf "$TMP_ARGON_DIR"
     echo "✅ تم دمج luci-theme-argon_2.2.9-20211016-1_all.ipk بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على luci-theme-argon_2.2.9-20211016-1_all.ipk في مجلد الجذر."
+fi
+
+# نسخ شعار argon.svg إلى /www/luci-static/argon/img/argon.svg وتوجيه القوالب إليه
+ARGON_SVG=""
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
+    ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
+elif [ -f "argon.svg" ]; then
+    ARGON_SVG="argon.svg"
+fi
+
+if [ -n "$ARGON_SVG" ]; then
+    ARGON_IMG_DIR="package/base-files/files/www/luci-static/argon/img"
+    ARGON_VIEW_DIR="package/base-files/files/usr/lib/lua/luci/view/themes/argon"
+    mkdir -p "$ARGON_IMG_DIR"
+    cp "$ARGON_SVG" "$ARGON_IMG_DIR/argon.svg"
+
+    if [ -d "$ARGON_VIEW_DIR" ]; then
+        for tpl in "$ARGON_VIEW_DIR/login.htm" "$ARGON_VIEW_DIR/header.htm"; do
+            if [ -f "$tpl" ]; then
+                sed -i 's|/luci-static/argon/img/[^"'\'' >)]*\.\(png\|jpg\|jpeg\|gif\|svg\|webp\)|/luci-static/argon/img/argon.svg|gi' "$tpl"
+            fi
+        done
+    fi
+    echo "✅ تم نسخ argon.svg إلى /www/luci-static/argon/img/argon.svg بنجاح."
+else
+    echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في مجلد الجذر."
 fi
 
 # نسخ خلفية الثيم إن وُجدت
