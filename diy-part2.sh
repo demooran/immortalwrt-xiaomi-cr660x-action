@@ -65,7 +65,7 @@ uci -q set wireless.default_radio0.ssid='promax'
 uci -q set wireless.default_radio0.encryption='none'
 if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
     uci set wireless.default_radio1.ssid='promax_5G'
-    uci -q set wireless.default_radio1.encryption='none'
+    uci set wireless.default_radio1.encryption='none'
 fi
 
 # 7. ضبط منافذ الجسر br-lan (lan1, lan2, lan3, wan) وتعطيل IPv6 على الجهاز
@@ -106,12 +106,57 @@ EOF
 fi
 
 # ==========================================
-# 4. دمج خلفية الثيم وتفعيل Argon
+# 4. دمج حزمة luci-theme-argon_2.2.9-20211016-1_all.ipk والخلفية وتفعيل Argon
 # ==========================================
-if [ -f .config ] && ! grep -q "CONFIG_PACKAGE_luci-theme-argon=" .config; then
-    echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
+# إزالة أي مرجع لحزمة luci-theme-argon من .config حتى لا يطلبها من الـ feeds
+if [ -f .config ]; then
+    sed -i '/CONFIG_PACKAGE_luci-theme-argon/d' .config
+    echo "# CONFIG_PACKAGE_luci-theme-argon is not set" >> .config
 fi
 
+# البحث عن ملف الثيم في مجلد الجذر (سواء داخل GITHUB_WORKSPACE أو المسار الحالي)
+ARGON_IPK=""
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/luci-theme-argon_2.2.9-20211016-1_all.ipk" ]; then
+    ARGON_IPK="$GITHUB_WORKSPACE/luci-theme-argon_2.2.9-20211016-1_all.ipk"
+elif [ -f "luci-theme-argon_2.2.9-20211016-1_all.ipk" ]; then
+    ARGON_IPK="luci-theme-argon_2.2.9-20211016-1_all.ipk"
+fi
+
+mkdir -p package/base-files/files
+if [ -n "$ARGON_IPK" ]; then
+    echo "📦 جارٍ فك ودمج الثيم من: $ARGON_IPK"
+    TMP_ARGON_DIR="/tmp/argon_ipk_extract"
+    rm -rf "$TMP_ARGON_DIR"
+    mkdir -p "$TMP_ARGON_DIR"
+
+    tar -xzf "$ARGON_IPK" -C "$TMP_ARGON_DIR" 2>/dev/null || tar -xf "$ARGON_IPK" -C "$TMP_ARGON_DIR" 2>/dev/null || true
+
+    if [ -f "$TMP_ARGON_DIR/data.tar.gz" ]; then
+        tar -xzf "$TMP_ARGON_DIR/data.tar.gz" -C package/base-files/files/
+    elif [ -f "$TMP_ARGON_DIR/data.tar.xz" ]; then
+        tar -xJf "$TMP_ARGON_DIR/data.tar.xz" -C package/base-files/files/
+    elif [ -f "$TMP_ARGON_DIR/data.tar.zst" ]; then
+        tar --zstd -xf "$TMP_ARGON_DIR/data.tar.zst" -C package/base-files/files/
+    elif [ -f "$TMP_ARGON_DIR/data.tar" ]; then
+        tar -xf "$TMP_ARGON_DIR/data.tar" -C package/base-files/files/
+    fi
+
+    # تنفيذ سكربت postinst إن وجد داخل control.tar.* لضبط أي روابط أو صلاحيات
+    if [ -f "$TMP_ARGON_DIR/control.tar.gz" ]; then
+        mkdir -p "$TMP_ARGON_DIR/ctrl"
+        tar -xzf "$TMP_ARGON_DIR/control.tar.gz" -C "$TMP_ARGON_DIR/ctrl" 2>/dev/null || true
+        if [ -f "$TMP_ARGON_DIR/ctrl/postinst" ]; then
+            sed -i 's|/etc/init.d/|package/base-files/files/etc/init.d/|g; s|/usr/|package/base-files/files/usr/|g' "$TMP_ARGON_DIR/ctrl/postinst" 2>/dev/null || true
+        fi
+    fi
+
+    rm -rf "$TMP_ARGON_DIR"
+    echo "✅ تم دمج luci-theme-argon_2.2.9-20211016-1_all.ipk بنجاح."
+else
+    echo "⚠️ تحذير: لم يتم العثور على luci-theme-argon_2.2.9-20211016-1_all.ipk في مجلد الجذر."
+fi
+
+# نسخ خلفية الثيم إن وُجدت
 mkdir -p package/base-files/files/www/luci-static/argon/background/
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
@@ -563,6 +608,7 @@ fi
 # 11. تخصيص الفوتر (Footer) لثيم Argon في OpenWrt 22.03 (Lua/HTM)
 # ==========================================
 for FOOTER_FILE in \
+    "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
     "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
     "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
 do
