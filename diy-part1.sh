@@ -5,8 +5,5 @@
 
 set -e
 
-# إزالة أي نسخة سابقة لثيم Argon لضمان سحب نظيف عند إعادة البناء
+# إزالة أي نسخة سابقة لثيم Argon لضمان عدم التعارض مع حزمة 2.2.9 المدمجة في diy-part2.sh
 rm -rf package/luci-theme-argon
-
-# سحب ثيم Argon بفرع 18.06 المتوافق مع واجهة OpenWrt 22.03 (Lua)
-git clone --depth 1 -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
