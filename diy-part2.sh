@@ -117,7 +117,7 @@ fi
 # ==========================================
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d" .config
-    echo "# CONFIG_PACKAGE_luci-theme-argon is not set" >> .config
+    echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
 fi
 
 ARGON_IPK=""
@@ -216,7 +216,7 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
     sed -i "s/\r//g" "$WIRELESS_JS"
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
+        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 38; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm بنجاح."
     fi
     awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
@@ -637,7 +637,7 @@ do
 </div>
 <footer class="mobile-hide" style="text-wrap: auto">
 	<div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
-		<span style="color: #5e72e4; font-weight: 500;">Powered by Promax-NEt</span>
+		<span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-wifi-770528863</span>
 	</div>
 </footer>
 </main>
@@ -651,10 +651,10 @@ EOF
 done
 
 # ==========================================
-# 12. تفعيل دعم WLAN Roaming (802.11r/k/v) عبر wpad-mbedtls ومنع تعارض wpad
+# 12. تفعيل حزمة wpad لتشغيل الواي فاي ومنع تعارض حزم wpad الأخرى
 # ==========================================
 if [ -f .config ]; then
-    sed -i "/CONFIG_PACKAGE_wpad-/d" .config
+    sed -i "/CONFIG_PACKAGE_wpad/d" .config
     cat << 'EOF' >> .config
 # CONFIG_PACKAGE_wpad-basic is not set
 # CONFIG_PACKAGE_wpad-basic-wolfssl is not set
@@ -662,9 +662,12 @@ if [ -f .config ]; then
 # CONFIG_PACKAGE_wpad-mini is not set
 # CONFIG_PACKAGE_wpad-mesh-wolfssl is not set
 # CONFIG_PACKAGE_wpad-mesh-mbedtls is not set
-CONFIG_PACKAGE_wpad-mbedtls=y
+# CONFIG_PACKAGE_wpad-mbedtls is not set
+# CONFIG_PACKAGE_wpad-wolfssl is not set
+# CONFIG_PACKAGE_wpad-openssl is not set
+CONFIG_PACKAGE_wpad=y
 EOF
-    echo "✅ تم ضبط wpad-mbedtls لتفعيل ميزات 802.11r/k/v ومنع التعارض."
+    echo "✅ تم ضبط حزمة wpad لتشغيل الواي فاي ومنع التعارض."
 fi
 
 # ==========================================
