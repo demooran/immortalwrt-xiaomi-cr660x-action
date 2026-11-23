@@ -110,10 +110,10 @@ jobs:
 
         echo "status=success" >> "$GITHUB_OUTPUT"
 
-        awk -F 'DEVICE_' '/^CONFIG_TARGET.*DEVICE.*=y$/ {
+        awk -F  DEVICE_   /^CONFIG_TARGET.*DEVICE.*=y$/ {
           split($2, a, "=")
           print a[1]
-        }' .config > DEVICE_NAME
+        }  .config > DEVICE_NAME
 
         if [ -s DEVICE_NAME ]; then
           echo "DEVICE_NAME=_$(head -n1 DEVICE_NAME)" >> "$GITHUB_ENV"
