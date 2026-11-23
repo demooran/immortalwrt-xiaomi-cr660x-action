@@ -14,13 +14,13 @@
 # 1. تعيين اسم الجهاز (Hostname) والمنطقة الزمنية
 # ==========================================
 if [ -f package/base-files/files/bin/config_generate ]; then
-    sed -i "s/OpenWrt/Promax/g; s/ImmortalWrt/Promax/g" package/base-files/files/bin/config_generate
+    sed -i "s/OpenWrt/hosam/g; s/ImmortalWrt/hosam/g" package/base-files/files/bin/config_generate
 fi
 
 mkdir -p package/base-files/files/etc/uci-defaults files/etc/uci-defaults
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/93-set-hostname
 #!/bin/sh
-uci -q set system.@system[0].hostname='Promax'
+uci -q set system.@system[0].hostname='hosam.AX'
 uci -q set system.@system[0].zonename='Asia/Aden'
 uci -q set system.@system[0].timezone='<+03>-3'
 uci commit system
