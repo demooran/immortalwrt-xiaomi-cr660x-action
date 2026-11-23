@@ -86,13 +86,13 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    # --- نقل ملف .config وملفات التخصيص إلى مجلد openwrt ---
+    # --- 1. نقل ملف .config وملفات التخصيص إلى مجلد openwrt ---
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e "$CONFIG_FILE" ] && mv "$CONFIG_FILE" openwrt/.config
 
-    # --- تطبيق تعديلات diy-part2.sh ثم تنظيف المخلفات وإعادة ضبط التبعيات عبر make defconfig ---
+    # --- 2. تشغيل diy-part2.sh ثم make defconfig لتثبيت التعديلات وحل التبعيات ---
     - name: Apply custom modifications (diy-part2.sh)
       run: |
         cd openwrt
@@ -100,9 +100,12 @@ jobs:
         "$GITHUB_WORKSPACE/$DIY_P2_SH"
         rm -rf tmp/.packageinfo staging_dir/target-*/root-* build_dir/target-*/root-*
         make defconfig
+        echo "======= Verify wpad & theme config ======="
+        grep -E "CONFIG_PACKAGE_wpad|CONFIG_PACKAGE_luci-theme-argon" .config || true
         echo "======= Actual modified config ======="
         ./scripts/diffconfig.sh
 
+    # --- 3. تحميل الحزم ثم البناء ---
     - name: Download package
       id: package
       run: |
