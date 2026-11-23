@@ -7,12 +7,9 @@
 #
 # https://github.com/P3TERX/Actions-OpenWrt
 # File name: diy-part2.sh
-# Description: OpenWrt 22.03 DIY script part 2 (After Update feeds)
+# Description: OpenWrt / ImmortalWrt DIY script part 2 for Xiaomi CR6609 (hosam.AX)
 #
 
-# ==========================================
-# 1. تعيين اسم الجهاز (Hostname)
-# ==========================================
 if [ -f package/base-files/files/bin/config_generate ]; then
     sed -i "s/OpenWrt/hosam.AX/g; s/ImmortalWrt/hosam.AX/g" package/base-files/files/bin/config_generate
 fi
@@ -26,41 +23,30 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/93-set-hostname
 
-# ==========================================
-# 2. إعدادات الواي فاي الافتراضية (تفعيل الراديو)
-# ==========================================
 WIFI_FILE="package/kernel/mac80211/files/lib/wifi/mac80211.sh"
 if [ -f "$WIFI_FILE" ]; then
     sed -i "s/disabled=1/disabled=0/g" "$WIFI_FILE"
 fi
 
-# ==========================================
-# 3. إعدادات وضع الـ Access Point والجسر br-lan وتمرير VLAN مثل 110
-# ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-set-ap-mode
 #!/bin/sh
 
-# 1. حذف واجهات الـ WAN
 uci -q delete network.wan
 uci -q delete network.wan6
 
-# 2. تعطيل DHCP على LAN
 uci -q set dhcp.lan.ignore='1'
 uci -q set dhcp.lan.dynamicdhcp='0'
 
-# 3. تعطيل IPv6
 uci -q set dhcp.lan.ra='disabled'
 uci -q set dhcp.lan.dhcpv6='disabled'
 uci -q set dhcp.lan.ndp='disabled'
 
-# 4. تعيين IP ثابت و DNS (بدون Gateway)
 uci -q set network.lan.proto='static'
 uci -q set network.lan.ipaddr='192.168.1.21'
 uci -q set network.lan.netmask='255.255.255.0'
 uci -q set network.lan.dns='8.8.8.8 1.1.1.1'
 uci -q delete network.lan.gateway
 
-# 5. عزل العملاء
 uci -q set wireless.default_radio0.isolate='1'
 uci -q set wireless.default_radio0.disassoc_low_ack='0'
 if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
@@ -68,7 +54,6 @@ if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
     uci -q set wireless.default_radio1.disassoc_low_ack='0'
 fi
 
-# 6. تعيين SSID
 uci -q set wireless.default_radio0.ssid='hossam-WIFI.6@'
 uci -q set wireless.default_radio0.encryption='none'
 if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
@@ -76,7 +61,6 @@ if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
     uci -q set wireless.default_radio1.encryption='none'
 fi
 
-# 7. ضبط منافذ الجسر br-lan (lan1, lan2, lan3, wan) وتعطيل IPv6 على الجهاز
 for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d '.' -f2 | cut -d '=' -f1); do
     if [ "$(uci -q get network.$dev.name)" = "br-lan" ]; then
         uci -q delete network.$dev.ports
@@ -87,7 +71,6 @@ for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d '.' -f2 | cu
     fi
 done
 
-# 8. تفعيل وضع promisc على br-lan و eth0 لضمان عدم إسقاط إطارات VLAN في MT7530 DSA
 ip link set dev br-lan promisc on 2>/dev/null || true
 ip link set dev eth0 promisc on 2>/dev/null || true
 
@@ -98,12 +81,10 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-set-ap-mode
 
-# ضمان بقاء promisc مفعلاً على br-lan و eth0 عند إقلاع الشبكة
 mkdir -p package/base-files/files/etc
 if [ -f package/base-files/files/etc/rc.local ]; then
     if ! grep -q "promisc on" package/base-files/files/etc/rc.local; then
-        sed -i "/exit 0/i ip link set dev br-lan promisc on 2>/dev/null || true
-ip link set dev eth0 promisc on 2>/dev/null || true" package/base-files/files/etc/rc.local
+        sed -i "/exit 0/i ip link set dev br-lan promisc on 2>/dev/null || true\nip link set dev eth0 promisc on 2>/dev/null || true" package/base-files/files/etc/rc.local
     fi
 else
     cat << 'EOF' > package/base-files/files/etc/rc.local
@@ -114,10 +95,6 @@ EOF
     chmod +x package/base-files/files/etc/rc.local
 fi
 
-# ==========================================
-# 4. دمج حزمة luci-theme-argon_2.2.9-20211016-1_all.ipk والخلفية والشعار وتفعيل Argon
-# ==========================================
-# إبقاء CONFIG_PACKAGE_luci-theme-argon مفعلاً حتى لا تفشل اعتمادية حزمة luci أثناء التجميع
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d" .config
     echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
@@ -155,7 +132,6 @@ else
     echo "⚠️ تحذير: لم يتم العثور على luci-theme-argon_2.2.9-20211016-1_all.ipk في مجلد الجذر."
 fi
 
-# نسخ شعار argon.svg إلى /www/luci-static/argon/img/argon.svg وتوجيه القوالب إليه
 ARGON_SVG=""
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
     ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
@@ -172,7 +148,7 @@ if [ -n "$ARGON_SVG" ]; then
     if [ -d "$ARGON_VIEW_DIR" ]; then
         for tpl in "$ARGON_VIEW_DIR/login.htm" "$ARGON_VIEW_DIR/header.htm"; do
             if [ -f "$tpl" ]; then
-                sed -i "s|/luci-static/argon/img/[^" >)]*\.\(png\|jpg\|jpeg\|gif\|svg\|webp\)|/luci-static/argon/img/argon.svg|gi" "$tpl"
+                sed -i -E 's|/luci-static/argon/img/[^" >)]*\.(png|jpg|jpeg|gif|svg|webp)|/luci-static/argon/img/argon.svg|Ig' "$tpl"
             fi
         done
     fi
@@ -181,7 +157,6 @@ else
     echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في مجلد الجذر."
 fi
 
-# نسخ خلفية الثيم إن وُجدت
 mkdir -p package/base-files/files/www/luci-static/argon/background/
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
@@ -193,7 +168,6 @@ else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
 fi
 
-# جعل الثيم الافتراضي هو Argon حصرياً
 sed -i "s/luci-theme-bootstrap/luci-theme-argon/g" feeds/luci/collections/luci/Makefile 2>/dev/null || true
 sed -i "s/luci-theme-bootstrap/luci-theme-argon/g" feeds/luci/modules/luci-base/Makefile 2>/dev/null || true
 
@@ -211,32 +185,22 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
-# ==========================================
-# 5. تعديل wireless.js (dBm + Status + Current power + 160 MHz)
-# ==========================================
 WIRELESS_JS=$(find feeds/luci package -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
-
-    sed -i "s///g" "$WIRELESS_JS"
-
+    sed -i "s/\r//g" "$WIRELESS_JS"
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
         sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm بنجاح."
     fi
-
-    awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get("wireless", radioNet.getWifiDeviceName(), "txpower") || "36""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
-
+    awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
     sed -i "s/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g" "$WIRELESS_JS"
     echo "✅ تم تعديل wireless.js بنجاح."
 else
     echo "⚠️ لم يتم العثور على wireless.js."
 fi
 
-# ==========================================
-# 6. تعطيل الخدمات (97)
-# ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/97-disable-router-services
 #!/bin/sh
 for svc in firewall eoip mwan3 odhcpd log dnsmasq; do
@@ -249,9 +213,6 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/97-disable-router-services
 
-# ==========================================
-# 7. إزالة تبويبات وصفحات SSH و SSH-Keys و HTTP(S) Access من الواجهة نهائياً
-# ==========================================
 MENU_SYS_JSON="feeds/luci/modules/luci-mod-system/root/usr/share/luci/menu.d/luci-mod-system.json"
 if [ -f "$MENU_SYS_JSON" ]; then
     awk '
@@ -268,9 +229,7 @@ if [ -f "$MENU_SYS_JSON" ]; then
     { print }
     ' "$MENU_SYS_JSON" > "$MENU_SYS_JSON.tmp" && mv "$MENU_SYS_JSON.tmp" "$MENU_SYS_JSON"
 
-    sed -i ":a;N;\$!ba;s/,\s*
-\s*}/
-}/g" "$MENU_SYS_JSON" 2>/dev/null || true
+    sed -i ":a;N;\$!ba;s/,\s*\n\s*}/\n}/g" "$MENU_SYS_JSON" 2>/dev/null || true
     echo "✅ تم حذف تبويبات SSH و SSH-Keys و HTTP(S) Access من قائمة LuCI بنجاح."
 fi
 
@@ -316,9 +275,6 @@ return view.extend({
 EOF
 fi
 
-# ==========================================
-# 8. تعيين طاقة 36 dBm والدولة (PA)
-# ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-fix-wifi-power
 #!/bin/sh
 uci -q batch << 'EOB'
@@ -335,9 +291,6 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-fix-wifi-power
 
-# ==========================================
-# 9. تخصيص معلومات النظام في واجهة Status (System)
-# ==========================================
 SYS_INCLUDE_JS=$(find feeds/luci -path "*/view/status/include/10_system.js" 2>/dev/null | head -n 1)
 if [ -n "$SYS_INCLUDE_JS" ] && [ -f "$SYS_INCLUDE_JS" ]; then
     cat << 'EOF' > "$SYS_INCLUDE_JS"
@@ -417,9 +370,6 @@ EOF
     echo "✅ تم تخصيص ملف 10_system.js بنجاح."
 fi
 
-# ==========================================
-# 10. تبسيط صفحة Backup / Flash Firmware وإبقاء Restore و Flash image فقط
-# ==========================================
 FLASH_JS=$(find feeds/luci -path "*/view/system/flash.js" 2>/dev/null | head -n 1)
 if [ -n "$FLASH_JS" ] && [ -f "$FLASH_JS" ]; then
     cat << 'EOF' > "$FLASH_JS"
@@ -440,8 +390,7 @@ var callSystemValidateFirmwareImage = rpc.declare({
 
 function findStorageSize(procmtd, procpart) {
 	var kernsize = 0, rootfsprovsize = 0, efsprovsize = 0, efsvalidsize = 0, rubifs = 0, mtdblocks = {};
-	procmtd.split(/
-/).forEach(function(ln) {
+	procmtd.split(/\n/).forEach(function(ln) {
 		var match = ln.match(/^mtd(\d+): [0-9a-fA-F]+ [0-9a-fA-F]+ "(.+?)"$/);
 		if (match) mtdblocks[match[2]] = parseInt(match[1], 10);
 	});
@@ -583,7 +532,7 @@ return view.extend({
 		    procmtd = rpc_replies[2] || '',
 		    procpart = rpc_replies[3] || '',
 		    procmounts = rpc_replies[4] || '',
-		    has_rootfs_data = (procmtd.match(/"rootfs_data"/) != null) || (procmounts.match("overlayfs:\/overlay \/ ") != null),
+		    has_rootfs_data = (procmtd.match(/"rootfs_data"/) != null) || (procmounts.match("overlayfs:\\/overlay \\/ ") != null),
 		    storage_size = findStorageSize(procmtd, procpart),
 		    m, s, o, ss;
 
@@ -632,10 +581,10 @@ EOF
     echo "✅ تم تخصيص ملف flash.js بنجاح."
 fi
 
-# ==========================================
-# 11. تخصيص الفوتر (Footer) لثيم Argon في OpenWrt 22.03 (Lua/HTM)
-# ==========================================
-for FOOTER_FILE in     "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm"     "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm"     "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
+for FOOTER_FILE in \
+    "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
+    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
 do
     if [ -f "$FOOTER_FILE" ]; then
         cat << 'EOF' > "$FOOTER_FILE"
@@ -658,9 +607,6 @@ EOF
     fi
 done
 
-# ==========================================
-# 12. تفعيل دعم WLAN Roaming (802.11r/k/v) عبر wpad-mbedtls
-# ==========================================
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_wpad-basic/d" .config
     sed -i "/CONFIG_PACKAGE_wpad-mini/d" .config
@@ -672,9 +618,6 @@ if [ -f .config ]; then
     echo "✅ تم ضبط wpad-mbedtls لتفعيل ميزات 802.11r/k/v."
 fi
 
-# ==========================================
-# 13. ضبط مستودعات opkg على HTTP لتفادي أخطاء شهادة TLS
-# ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-fix-opkg-http
 #!/bin/sh
 if [ -f /etc/opkg/distfeeds.conf ]; then
@@ -684,9 +627,6 @@ exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/96-fix-opkg-http
 
-# ==========================================
-# 14. إخفاء تبويب Argon Config وتبويب Software من قائمة LuCI نهائياً
-# ==========================================
 for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*.json" 2>/dev/null); do
     case "$(basename "$MENU_FILE")" in
         *argon*config*.json|*opkg*.json|*packages*.json)
@@ -710,16 +650,11 @@ for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*
         { print }
         ' "$MENU_FILE" > "$MENU_FILE.tmp" && mv "$MENU_FILE.tmp" "$MENU_FILE"
 
-        sed -i ":a;N;\$!ba;s/,\s*
-\s*}/
-}/g" "$MENU_FILE" 2>/dev/null || true
+        sed -i ":a;N;\$!ba;s/,\s*\n\s*}/\n}/g" "$MENU_FILE" 2>/dev/null || true
         echo "✅ تم إخفاء العناصر المستهدفة من: $MENU_FILE"
     fi
 done
 
-# ==========================================
-# 15. دمج إضافة quicksetup_backup.tar.gz داخل الفيرموير
-# ==========================================
 mkdir -p package/base-files/files
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" ]; then
     tar -xzf "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" -C package/base-files/files/
@@ -740,9 +675,6 @@ else
     echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_backup.tar.gz في المستودع."
 fi
 
-# ==========================================
-# 16. تسلسل إضاءة LEDs عند الإقلاع والاستقرار على الأزرق وضبط blue:net على br-lan
-# ==========================================
 mkdir -p package/base-files/files/usr/bin
 cat << 'EOF' > package/base-files/files/usr/bin/promax-led-boot.sh
 #!/bin/sh
@@ -827,9 +759,6 @@ if [ -f package/base-files/files/etc/rc.local ]; then
 fi
 echo "✅ تم إعداد تسلسل LEDs عند الإقلاع بنجاح."
 
-# ==========================================
-# 17. إزالة علامة الصح من Enable NTP client وحذف إدخالات NTP server candidates
-# ==========================================
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/94-promax-ntp-clean
 #!/bin/sh
 uci -q set system.ntp.enabled='0'
