@@ -835,11 +835,16 @@ chmod +x package/base-files/files/etc/uci-defaults/94-promax-ntp-clean
 echo "✅ تم إعداد تعطيل NTP client وحذف NTP server candidates."
 
 # ==========================================
-# 18. جعل زر WPS (و Mesh) يقوم بعمل فورمات (10s+) وتعطيل زر Reset الخلفي
+# 18. جعل زر WPS (و Mesh) يقوم بعمل فورمات (10s+) وتعطيل زر Reset الخلفي (بدون تعارض مع hostapd-common)
 # ==========================================
-mkdir -p package/base-files/files/etc/rc.button files/etc/rc.button
+rm -f package/base-files/files/etc/rc.button/wps \
+      package/base-files/files/etc/rc.button/mesh \
+      files/etc/rc.button/wps \
+      files/etc/rc.button/mesh
 
-cat << 'EOF' > package/base-files/files/etc/rc.button/wps
+mkdir -p package/base-files/files/usr/bin package/base-files/files/etc/uci-defaults package/base-files/files/etc/rc.button files/etc/rc.button
+
+cat << 'EOF' > package/base-files/files/usr/bin/promax-wps-reset.sh
 #!/bin/sh
 
 . /lib/functions.sh
@@ -855,10 +860,7 @@ fi
 
 return 0
 EOF
-chmod +x package/base-files/files/etc/rc.button/wps
-
-cp package/base-files/files/etc/rc.button/wps package/base-files/files/etc/rc.button/mesh
-chmod +x package/base-files/files/etc/rc.button/mesh
+chmod +x package/base-files/files/usr/bin/promax-wps-reset.sh
 
 cat << 'EOF' > package/base-files/files/etc/rc.button/reset
 #!/bin/sh
@@ -870,9 +872,23 @@ return 0
 EOF
 chmod +x package/base-files/files/etc/rc.button/reset
 
-cp -f package/base-files/files/etc/rc.button/wps files/etc/rc.button/wps 2>/dev/null || true
-cp -f package/base-files/files/etc/rc.button/mesh files/etc/rc.button/mesh 2>/dev/null || true
-cp -f package/base-files/files/etc/rc.button/reset files/etc/rc.button/reset 2>/dev/null || true
-chmod +x files/etc/rc.button/wps files/etc/rc.button/mesh files/etc/rc.button/reset 2>/dev/null || true
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/92-promax-buttons
+#!/bin/sh
+mkdir -p /etc/rc.button
 
-echo "✅ تم إعداد زر WPS للفرمتة (10 ثوانٍ+) وتعطيل زر reset الخلفي."
+cat << 'BTN' > /etc/rc.button/wps
+#!/bin/sh
+exec /usr/bin/promax-wps-reset.sh
+BTN
+chmod +x /etc/rc.button/wps
+
+cp -f /etc/rc.button/wps /etc/rc.button/mesh
+chmod +x /etc/rc.button/mesh
+exit 0
+EOF
+chmod +x package/base-files/files/etc/uci-defaults/92-promax-buttons
+
+cp -f package/base-files/files/etc/rc.button/reset files/etc/rc.button/reset 2>/dev/null || true
+chmod +x files/etc/rc.button/reset 2>/dev/null || true
+
+echo "✅ تم إعداد زر WPS للفرمتة (10 ثوانٍ+) وتعطيل زر reset الخلفي بدون تعارض مع hostapd-common."
