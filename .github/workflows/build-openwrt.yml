@@ -62,6 +62,17 @@ jobs:
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
+    - name: Cache dl and ccache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /workdir/openwrt/dl
+          /workdir/ccache
+        key: openwrt-22.03-ramips-mt7621-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}
+        restore-keys: |
+          openwrt-22.03-ramips-mt7621-
+          openwrt-22.03-
+
     - name: Load custom feeds
       run: |
         [ -e "$FEEDS_CONF" ] && mv "$FEEDS_CONF" openwrt/feeds.conf.default
@@ -101,12 +112,16 @@ jobs:
 
     - name: Compile the firmware
       id: compile
+      env:
+        CCACHE_DIR: /workdir/ccache
+        USE_CCACHE: "1"
       run: |
         cd openwrt
+        mkdir -p "$CCACHE_DIR"
 
         echo "Starting compilation with $(nproc) threads"
 
-        make -j$(nproc) || make -j1 V=s
+        make -j$(nproc) USE_CCACHE=1 || make -j1 V=s USE_CCACHE=1
 
         echo "status=success" >> "$GITHUB_OUTPUT"
 
