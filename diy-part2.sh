@@ -14,7 +14,7 @@
 # 1. تعيين اسم الجهاز (Hostname) والمنطقة الزمنية
 # ==========================================
 if [ -f package/base-files/files/bin/config_generate ]; then
-    sed -i "s/OpenWrt/hosam/g; s/ImmortalWrt/hosam/g" package/base-files/files/bin/config_generate
+    sed -i "s/OpenWrt/hosam.AX/g; s/ImmortalWrt/hosam.AX/g" package/base-files/files/bin/config_generate
 fi
 
 mkdir -p package/base-files/files/etc/uci-defaults files/etc/uci-defaults
@@ -326,7 +326,7 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/99-fix-wifi-power
 
 # ==========================================
-# 9. تخصيص معلومات النظام في واجهة Status (System) -> Promax-NEt
+# 9. تخصيص معلومات النظام في واجهة Status (System) -> Ahosam-wifi-770528863
 # ==========================================
 SYS_INCLUDE_JS=$(find feeds/luci -path "*/view/status/include/10_system.js" 2>/dev/null | head -n 1)
 if [ -n "$SYS_INCLUDE_JS" ] && [ -f "$SYS_INCLUDE_JS" ]; then
@@ -374,7 +374,7 @@ return baseclass.extend({
 			);
 		}
 
-		var customTag = 'Promax-NEt';
+		var customTag = 'Ahosam-wifi-770528863';
 
 		var fields = [
 			_('Hostname'),         boardinfo.hostname,
