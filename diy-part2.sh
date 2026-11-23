@@ -78,7 +78,7 @@ if uci -q get wireless.default_radio1 >/dev/null 2>&1; then
     uci -q set wireless.default_radio1.encryption='none'
 fi
 
-for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d '.' -f2 | cut -d '=' -f1); do
+for dev in $(uci show network 2>/dev/null | grep "=device" | cut -d. -f2 | cut -d= -f1); do
     if [ "$(uci -q get network.$dev.name)" = "br-lan" ]; then
         uci -q delete network.$dev.ports
         for p in lan1 lan2 lan3 wan; do
@@ -192,13 +192,6 @@ elif [ -f "bg.jpg" ]; then
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
 fi
-
-# إزالة شرط الاعتماد الصلب على luci-theme-argon من مجموعة luci حتى لا يفشل package/install
-for MK in feeds/luci/collections/luci/Makefile package/feeds/luci/luci/Makefile; do
-    if [ -f "$MK" ]; then
-        sed -i "s/+luci-theme-argon//g; s/luci-theme-argon//g" "$MK" 2>/dev/null || true
-    fi
-done
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
@@ -658,17 +651,20 @@ EOF
 done
 
 # ==========================================
-# 12. تفعيل دعم WLAN Roaming (802.11r/k/v) عبر wpad-mbedtls
+# 12. تفعيل دعم WLAN Roaming (802.11r/k/v) عبر wpad-mbedtls ومنع تعارض wpad
 # ==========================================
 if [ -f .config ]; then
-    sed -i "/CONFIG_PACKAGE_wpad-basic/d" .config
-    sed -i "/CONFIG_PACKAGE_wpad-mini/d" .config
-    sed -i "/CONFIG_PACKAGE_wpad-mesh/d" .config
-    echo "# CONFIG_PACKAGE_wpad-basic-mbedtls is not set" >> .config
-    if ! grep -q "^CONFIG_PACKAGE_wpad-mbedtls=" .config; then
-        echo "CONFIG_PACKAGE_wpad-mbedtls=y" >> .config
-    fi
-    echo "✅ تم ضبط wpad-mbedtls لتفعيل ميزات 802.11r/k/v."
+    sed -i "/CONFIG_PACKAGE_wpad-/d" .config
+    cat << 'EOF' >> .config
+# CONFIG_PACKAGE_wpad-basic is not set
+# CONFIG_PACKAGE_wpad-basic-wolfssl is not set
+# CONFIG_PACKAGE_wpad-basic-mbedtls is not set
+# CONFIG_PACKAGE_wpad-mini is not set
+# CONFIG_PACKAGE_wpad-mesh-wolfssl is not set
+# CONFIG_PACKAGE_wpad-mesh-mbedtls is not set
+CONFIG_PACKAGE_wpad-mbedtls=y
+EOF
+    echo "✅ تم ضبط wpad-mbedtls لتفعيل ميزات 802.11r/k/v ومنع التعارض."
 fi
 
 # ==========================================
@@ -696,7 +692,7 @@ for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*
     esac
     if grep -qE "admin/system/opkg|admin/system/packages|admin/system/argon|admin/system/argon-config" "$MENU_FILE"; then
         awk '
-        /"admin\/system\/opkg":/ || /"admin\/system\/packages":/ || /"admin\/system\/argon":/ || /"admin\/system\/argon-config":/ { skip=1; braces=0 }
+        /"admin\/system\/admin\/opkg":/ || /"admin\/system\/admin\/packages":/ || /"admin\/system\/admin\/argon":/ || /"admin\/system\/admin\/argon-config":/ { skip=1; braces=0 }
         skip {
             for (i=1; i<=length($0); i++) {
                 c = substr($0, i, 1)
