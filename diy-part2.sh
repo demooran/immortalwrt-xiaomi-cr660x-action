@@ -113,7 +113,7 @@ EOF
 fi
 
 # ==========================================
-# 4. دمج ثيم argon_backup.tar.gz (الإصدار المعتمد 2.2.5) وتخصيصه وتفعيله
+# 4. دمج ثيم argon_backup.tar.gz من جذر مشروع البناء وتخصيصه وتفعيله
 # ==========================================
 rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
        package/base-files/files/www/luci-static/argon \
@@ -126,21 +126,23 @@ if [ -f .config ]; then
 fi
 
 mkdir -p package/base-files/files/etc/uci-defaults
-if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon_backup.tar.gz" ]; then
-    tar -xzf "$GITHUB_WORKSPACE/argon_backup.tar.gz" -C package/base-files/files/
-    echo "✅ تم فك argon_backup.tar.gz داخل package/base-files/files/."
-elif [ -f "argon_backup.tar.gz" ]; then
-    tar -xzf "argon_backup.tar.gz" -C package/base-files/files/
-    echo "✅ تم فك argon_backup.tar.gz من المجلد الحالي."
+if [ -f "argon_backup.tar.gz" ]; then
+    tar -xzpf "argon_backup.tar.gz" -C package/base-files/files/
+    rm -rf package/base-files/files/tmp/luci-indexcache package/base-files/files/tmp/luci-modulecache package/base-files/files/tmp/luci-*
+    echo "✅ تم فك argon_backup.tar.gz من جذر مشروع البناء إلى package/base-files/files/."
+elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon_backup.tar.gz" ]; then
+    tar -xzpf "$GITHUB_WORKSPACE/argon_backup.tar.gz" -C package/base-files/files/
+    rm -rf package/base-files/files/tmp/luci-indexcache package/base-files/files/tmp/luci-modulecache package/base-files/files/tmp/luci-*
+    echo "✅ تم فك argon_backup.tar.gz من GITHUB_WORKSPACE."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف argon_backup.tar.gz."
 fi
 
 ARGON_SVG=""
-if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
-    ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
-elif [ -f "argon.svg" ]; then
+if [ -f "argon.svg" ]; then
     ARGON_SVG="argon.svg"
+elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
+    ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
 fi
 
 if [ -n "$ARGON_SVG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
@@ -150,10 +152,10 @@ if [ -n "$ARGON_SVG" ] && [ -d "package/base-files/files/www/luci-static/argon" 
 fi
 
 BG_IMG=""
-if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
-    BG_IMG="$GITHUB_WORKSPACE/bg.jpg"
-elif [ -f "bg.jpg" ]; then
+if [ -f "bg.jpg" ]; then
     BG_IMG="bg.jpg"
+elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
+    BG_IMG="$GITHUB_WORKSPACE/bg.jpg"
 fi
 
 if [ -n "$BG_IMG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
@@ -240,7 +242,7 @@ if [ -f "$MENU_SYS_JSON" ]; then
     { print }
     ' "$MENU_SYS_JSON" > "$MENU_SYS_JSON.tmp" && mv "$MENU_SYS_JSON.tmp" "$MENU_SYS_JSON"
 
-    sed -i ":a;N;\$!ba;s/,\s*\n\s*}/\n}/g" "$MENU_SYS_JSON" 2>/dev/null || true
+    sed -i ':a;N;$!ba;s/,\s*\n\s*}/\n}/g' "$MENU_SYS_JSON" 2>/dev/null || true
     echo "✅ تم حذف تبويبات SSH و SSH-Keys و HTTP(S) Access من قائمة LuCI بنجاح."
 fi
 
@@ -693,7 +695,7 @@ for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*
         { print }
         ' "$MENU_FILE" > "$MENU_FILE.tmp" && mv "$MENU_FILE.tmp" "$MENU_FILE"
 
-        sed -i ":a;N;\$!ba;s/,\s*\n\s*}/\n}/g" "$MENU_FILE" 2>/dev/null || true
+        sed -i ':a;N;$!ba;s/,\s*\n\s*}/\n}/g' "$MENU_FILE" 2>/dev/null || true
         echo "✅ تم إخفاء العناصر المستهدفة من: $MENU_FILE"
     fi
 done
@@ -702,8 +704,8 @@ done
 # 15. دمج إضافة quicksetup_backup.tar.gz داخل الفيرموير
 # ==========================================
 mkdir -p package/base-files/files
-if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" ]; then
-    tar -xzf "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" -C package/base-files/files/
+if [ -f "quicksetup_backup.tar.gz" ]; then
+    tar -xzpf "quicksetup_backup.tar.gz" -C package/base-files/files/
     chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
 
     cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
@@ -717,6 +719,21 @@ exit 0
 EOF
     chmod +x package/base-files/files/etc/uci-defaults/95-enable-quicksetup
     echo "✅ تم دمج إضافة quicksetup وتفعيل خدمة wizard بنجاح."
+elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" ]; then
+    tar -xzpf "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" -C package/base-files/files/
+    chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
+
+    cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
+#!/bin/sh
+if [ -x /etc/init.d/wizard ]; then
+    /etc/init.d/wizard enable >/dev/null 2>&1 || true
+    /etc/init.d/wizard start >/dev/null 2>&1 || true
+fi
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+exit 0
+EOF
+    chmod +x package/base-files/files/etc/uci-defaults/95-enable-quicksetup
+    echo "✅ تم دمج إضافة quicksetup من GITHUB_WORKSPACE بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_backup.tar.gz في المستودع."
 fi
