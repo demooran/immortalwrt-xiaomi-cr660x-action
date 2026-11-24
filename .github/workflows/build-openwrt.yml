@@ -59,8 +59,8 @@ jobs:
       working-directory: /workdir
       run: |
         df -hT $PWD
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        git clone --depth 1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
+        ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
     - name: Cache dl and ccache
       uses: actions/cache@v4
@@ -68,10 +68,10 @@ jobs:
         path: |
           /workdir/openwrt/dl
           /workdir/ccache
-        key: openwrt-22.03-ramips-mt7621-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}
+        key: openwrt-23.05-ramips-mt7621-${{ hashFiles('.config', 'diy-part1.sh', 'diy-part2.sh') }}
         restore-keys: |
-          openwrt-22.03-ramips-mt7621-
-          openwrt-22.03-
+          openwrt-23.05-ramips-mt7621-
+          openwrt-23.05-
 
     - name: Load custom feeds
       run: |
@@ -165,11 +165,11 @@ jobs:
 
         TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
         TAG_NAME="promax-${TIMESTAMP}"
-        RELEASE_TITLE="PROMAX OpenWrt 22.03 (${TIMESTAMP})"
+        RELEASE_TITLE="PROMAX OpenWrt 23.05 (${TIMESTAMP})"
 
         gh release create "$TAG_NAME" "$GITHUB_WORKSPACE/release_assets"/* \
           --title "$RELEASE_TITLE" \
-          --notes "Automated OpenWrt 22.03 firmware build for PROMAX AP (CR6609 / TX1806)."
+          --notes "Automated OpenWrt 23.05 firmware build for PROMAX AP (CR6609 / TX1806)."
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
