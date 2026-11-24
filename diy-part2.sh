@@ -53,7 +53,7 @@ uci -q set dhcp.lan.dhcpv6='disabled'
 uci -q set dhcp.lan.ndp='disabled'
 
 uci -q set network.lan.proto='static'
-uci -q set network.lan.ipaddr='192.168.1.21'
+uci -q set network.lan.ipaddr='192.168.1.20'
 uci -q set network.lan.netmask='255.255.255.0'
 uci -q set network.lan.dns='8.8.8.8 1.1.1.1'
 uci -q delete network.lan.gateway
@@ -211,7 +211,7 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     sed -i "s/\r//g" "$WIRELESS_JS"
 
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
+        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 38; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm (حتى 40) بنجاح."
     fi
 
