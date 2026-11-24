@@ -113,26 +113,27 @@ EOF
 fi
 
 # ==========================================
-# 4. جلب حزمة luci-theme-argon وتخصيصها وتفعيلها بأمان
+# 4. دمج ثيم argon_backup.tar.gz (الإصدار المعتمد 2.2.5) وتخصيصه وتفعيله
 # ==========================================
 rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
        package/base-files/files/www/luci-static/argon \
        package/base-files/files/usr/lib/lua/luci/view/themes/argon
 
-git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon || \
-git clone --depth=1 -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
-
-for ARGON_TPL in $(find package/luci-theme-argon -type f \( -name "*.htm" -o -name "*.lua" \) 2>/dev/null); do
-    if grep -q "node_childs" "$ARGON_TPL"; then
-        sed -i 's/\([a-zA-Z0-9_.]*\):node_childs(\([^)]*\))/(\1.node_childs and \1:node_childs(\2) or {})/g; s/\([a-zA-Z0-9_.]*\)\.node_childs/(\1.node_childs or {})/g' "$ARGON_TPL"
-    fi
-done
-
-ls -la package/luci-theme-argon/luasrc/view/themes/argon/ 2>/dev/null || echo "⚠️ تحذير: لم يتم العثور على قوالب Lua للثيم"
-
 if [ -f .config ]; then
-    sed -i "/CONFIG_PACKAGE_luci-theme-argon/d" .config
-    echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
+    sed -i "/CONFIG_PACKAGE_luci-theme-argon/d; /CONFIG_PACKAGE_luci-app-argon-config/d" .config
+    echo "# CONFIG_PACKAGE_luci-theme-argon is not set" >> .config
+    echo "# CONFIG_PACKAGE_luci-app-argon-config is not set" >> .config
+fi
+
+mkdir -p package/base-files/files/etc/uci-defaults
+if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon_backup.tar.gz" ]; then
+    tar -xzf "$GITHUB_WORKSPACE/argon_backup.tar.gz" -C package/base-files/files/
+    echo "✅ تم فك argon_backup.tar.gz داخل package/base-files/files/."
+elif [ -f "argon_backup.tar.gz" ]; then
+    tar -xzf "argon_backup.tar.gz" -C package/base-files/files/
+    echo "✅ تم فك argon_backup.tar.gz من المجلد الحالي."
+else
+    echo "⚠️ تحذير: لم يتم العثور على ملف argon_backup.tar.gz."
 fi
 
 ARGON_SVG=""
@@ -142,35 +143,10 @@ elif [ -f "argon.svg" ]; then
     ARGON_SVG="argon.svg"
 fi
 
-if [ -n "$ARGON_SVG" ]; then
-    for IMG_DIR in \
-        "package/luci-theme-argon/htdocs/luci-static/argon/img" \
-        "package/luci-theme-argon/luasrc/view/themes/argon/img"
-    do
-        if [ -d "$(dirname "$IMG_DIR")" ]; then
-            mkdir -p "$IMG_DIR"
-            cp "$ARGON_SVG" "$IMG_DIR/argon.svg"
-        fi
-    done
-
-    for VIEW_DIR in \
-        "package/luci-theme-argon/luasrc/view/themes/argon" \
-        "package/luci-theme-argon/ucode/template/themes/argon"
-    do
-        if [ -d "$VIEW_DIR" ]; then
-            for tpl in "$VIEW_DIR/login.htm" "$VIEW_DIR/header.htm" "$VIEW_DIR/sysauth.htm" "$VIEW_DIR/login.ut" "$VIEW_DIR/header.ut"; do
-                if [ -f "$tpl" ]; then
-                    awk '{
-                        gsub(/\/luci-static\/argon\/img\/[^" >)]*\.(png|jpg|jpeg|gif|svg|webp|PNG|JPG|JPEG|GIF|SVG|WEBP)/, "/luci-static/argon/img/argon.svg");
-                        print
-                    }' "$tpl" > "$tpl.tmp" && mv "$tpl.tmp" "$tpl"
-                fi
-            done
-        fi
-    done
-    echo "✅ تم تجهيز شعار argon.svg وتحديث القوالب في package/luci-theme-argon بنجاح."
-else
-    echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في مجلد الجذر."
+if [ -n "$ARGON_SVG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
+    mkdir -p package/base-files/files/www/luci-static/argon/img
+    cp "$ARGON_SVG" package/base-files/files/www/luci-static/argon/img/argon.svg
+    echo "✅ تم نسخ شعار argon.svg إلى الثيم."
 fi
 
 BG_IMG=""
@@ -180,34 +156,26 @@ elif [ -f "bg.jpg" ]; then
     BG_IMG="bg.jpg"
 fi
 
-if [ -n "$BG_IMG" ]; then
-    for BG_DIR in \
-        "package/luci-theme-argon/htdocs/luci-static/argon/background" \
-        "package/luci-theme-argon/luasrc/view/themes/argon/background"
-    do
-        if [ -d "$(dirname "$BG_DIR")" ]; then
-            mkdir -p "$BG_DIR"
-            cp "$BG_IMG" "$BG_DIR/bg.jpg"
-        fi
-    done
-    echo "✅ تم نسخ خلفية الثيم بنجاح."
-else
-    echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
+if [ -n "$BG_IMG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
+    mkdir -p package/base-files/files/www/luci-static/argon/background
+    cp "$BG_IMG" package/base-files/files/www/luci-static/argon/background/bg.jpg
+    echo "✅ تم نسخ خلفية bg.jpg إلى الثيم."
 fi
 
-cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-enable-argon
 #!/bin/sh
 if [ -d /usr/lib/lua/luci/view/themes/argon ] || [ -d /www/luci-static/argon ]; then
+    uci -q set luci.main.theme='Argon'
     uci -q set luci.main.mediaurlbase='/luci-static/argon'
     uci -q set argon.@global[0].bing_background='0'
     uci -q set argon.@global[0].mode='normal'
     uci commit luci
     uci -q commit argon
-    rm -rf /tmp/luci-*
+    rm -rf /tmp/luci-indexcache /tmp/luci-modulecache /tmp/luci-*
 fi
 exit 0
 EOF
-chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
+chmod +x package/base-files/files/etc/uci-defaults/96-enable-argon
 
 # ==========================================
 # 5. تعديل wireless.js (dBm حتى 40 + Current power + 160 MHz)
@@ -416,7 +384,7 @@ return baseclass.extend({
 	}
 });
 EOF
-    echo "✅ تم تخصيص ملف 10_system.js بهوية Promax-NEt بنجاح."
+    echo "✅ تم تخصيص ملف 10_system.js بهوية Ahosam-wifi-770528863 بنجاح."
 fi
 
 # ==========================================
@@ -637,6 +605,7 @@ fi
 # 11. تخصيص الفوتر (Footer) لثيم Argon (Promax-NEt)
 # ==========================================
 for FOOTER_FILE in \
+    "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
     "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
     "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
 do
@@ -797,9 +766,9 @@ new_content = pattern.sub(patch_single_led, content)
 if new_content != content:
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_content)
-    print(f'  ✅ تم ضبط البرتقالي (on) والأزرق (off) في {path}')
+    print(f"  ✅ تم ضبط البرتقالي (on) والأزرق (off) في {path}")
 else:
-    print(f'  ℹ️ لم يتم تغيير أي شيء في {path}')
+    print(f"  ℹ️ لم يتم تغيير أي شيء في {path}")
 PYEOF
     fi
 done
