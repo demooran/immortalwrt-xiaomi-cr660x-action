@@ -113,46 +113,21 @@ EOF
 fi
 
 # ==========================================
-# 4. دمج حزمة luci-theme-argon_2.2.9-20211016-1_all.ipk والخلفية والشعار وتفعيل Argon
+# 4. جلب حزمة luci-theme-argon من المصدر وتخصيص الشعار والخلفية وتفعيل الثيم
 # ==========================================
+rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
+       package/base-files/files/www/luci-static/argon \
+       package/base-files/files/usr/lib/lua/luci/view/themes/argon
+
+git clone --depth=1 -b 22.03 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon 2>/dev/null || \
+git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d" .config
     echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
 fi
 
-ARGON_IPK=""
-if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/luci-theme-argon_2.2.9-20211016-1_all.ipk" ]; then
-    ARGON_IPK="$GITHUB_WORKSPACE/luci-theme-argon_2.2.9-20211016-1_all.ipk"
-elif [ -f "luci-theme-argon_2.2.9-20211016-1_all.ipk" ]; then
-    ARGON_IPK="luci-theme-argon_2.2.9-20211016-1_all.ipk"
-fi
-
-mkdir -p package/base-files/files
-if [ -n "$ARGON_IPK" ]; then
-    echo "📦 جارٍ فك ودمج الثيم من: $ARGON_IPK"
-    TMP_ARGON_DIR="/tmp/argon_ipk_extract"
-    rm -rf "$TMP_ARGON_DIR"
-    mkdir -p "$TMP_ARGON_DIR"
-
-    tar -xzf "$ARGON_IPK" -C "$TMP_ARGON_DIR" 2>/dev/null || tar -xf "$ARGON_IPK" -C "$TMP_ARGON_DIR" 2>/dev/null || true
-
-    if [ -f "$TMP_ARGON_DIR/data.tar.gz" ]; then
-        tar -xzf "$TMP_ARGON_DIR/data.tar.gz" -C package/base-files/files/
-    elif [ -f "$TMP_ARGON_DIR/data.tar.xz" ]; then
-        tar -xJf "$TMP_ARGON_DIR/data.tar.xz" -C package/base-files/files/
-    elif [ -f "$TMP_ARGON_DIR/data.tar.zst" ]; then
-        tar --zstd -xf "$TMP_ARGON_DIR/data.tar.zst" -C package/base-files/files/
-    elif [ -f "$TMP_ARGON_DIR/data.tar" ]; then
-        tar -xf "$TMP_ARGON_DIR/data.tar" -C package/base-files/files/
-    fi
-
-    rm -rf "$TMP_ARGON_DIR"
-    echo "✅ تم دمج luci-theme-argon_2.2.9-20211016-1_all.ipk بنجاح."
-else
-    echo "⚠️ تحذير: لم يتم العثور على luci-theme-argon_2.2.9-20211016-1_all.ipk في مجلد الجذر."
-fi
-
-# نسخ شعار argon.svg إلى /www/luci-static/argon/img/argon.svg وتوجيه القوالب إليه بأمان عبر awk
+# نسخ شعار argon.svg إلى مجلد الثيم وتوجيه القوالب إليه بأمان عبر awk
 ARGON_SVG=""
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
     ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
@@ -161,33 +136,54 @@ elif [ -f "argon.svg" ]; then
 fi
 
 if [ -n "$ARGON_SVG" ]; then
-    ARGON_IMG_DIR="package/base-files/files/www/luci-static/argon/img"
-    ARGON_VIEW_DIR="package/base-files/files/usr/lib/lua/luci/view/themes/argon"
-    mkdir -p "$ARGON_IMG_DIR"
-    cp "$ARGON_SVG" "$ARGON_IMG_DIR/argon.svg"
+    for IMG_DIR in \
+        "package/luci-theme-argon/htdocs/luci-static/argon/img" \
+        "package/luci-theme-argon/luasrc/view/themes/argon/img"
+    do
+        if [ -d "$(dirname "$IMG_DIR")" ]; then
+            mkdir -p "$IMG_DIR"
+            cp "$ARGON_SVG" "$IMG_DIR/argon.svg"
+        fi
+    done
 
-    if [ -d "$ARGON_VIEW_DIR" ]; then
-        for tpl in "$ARGON_VIEW_DIR/login.htm" "$ARGON_VIEW_DIR/header.htm"; do
-            if [ -f "$tpl" ]; then
-                awk '{
-                    gsub(/\/luci-static\/argon\/img\/[^" >)]*\.(png|jpg|jpeg|gif|svg|webp|PNG|JPG|JPEG|GIF|SVG|WEBP)/, "/luci-static/argon/img/argon.svg");
-                    print
-                }' "$tpl" > "$tpl.tmp" && mv "$tpl.tmp" "$tpl"
-            fi
-        done
-    fi
-    echo "✅ تم نسخ argon.svg إلى /www/luci-static/argon/img/argon.svg وتحديث القوالب بنجاح."
+    for VIEW_DIR in \
+        "package/luci-theme-argon/luasrc/view/themes/argon" \
+        "package/luci-theme-argon/ucode/template/themes/argon"
+    do
+        if [ -d "$VIEW_DIR" ]; then
+            for tpl in "$VIEW_DIR/login.htm" "$VIEW_DIR/header.htm" "$VIEW_DIR/login.ut" "$VIEW_DIR/header.ut"; do
+                if [ -f "$tpl" ]; then
+                    awk '{
+                        gsub(/\/luci-static\/argon\/img\/[^" >)]*\.(png|jpg|jpeg|gif|svg|webp|PNG|JPG|JPEG|GIF|SVG|WEBP)/, "/luci-static/argon/img/argon.svg");
+                        print
+                    }' "$tpl" > "$tpl.tmp" && mv "$tpl.tmp" "$tpl"
+                fi
+            done
+        fi
+    done
+    echo "✅ تم تجهيز شعار argon.svg وتحديث القوالب في package/luci-theme-argon بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في مجلد الجذر."
 fi
 
 # نسخ خلفية الثيم إن وُجدت
-mkdir -p package/base-files/files/www/luci-static/argon/background/
+BG_IMG=""
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
-    cp "$GITHUB_WORKSPACE/bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
-    echo "✅ تم نسخ خلفية الثيم بنجاح."
+    BG_IMG="$GITHUB_WORKSPACE/bg.jpg"
 elif [ -f "bg.jpg" ]; then
-    cp "bg.jpg" package/base-files/files/www/luci-static/argon/background/bg.jpg
+    BG_IMG="bg.jpg"
+fi
+
+if [ -n "$BG_IMG" ]; then
+    for BG_DIR in \
+        "package/luci-theme-argon/htdocs/luci-static/argon/background" \
+        "package/luci-theme-argon/luasrc/view/themes/argon/background"
+    do
+        if [ -d "$(dirname "$BG_DIR")" ]; then
+            mkdir -p "$BG_DIR"
+            cp "$BG_IMG" "$BG_DIR/bg.jpg"
+        fi
+    done
     echo "✅ تم نسخ خلفية الثيم بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف bg.jpg."
@@ -216,7 +212,7 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
     sed -i "s/\r//g" "$WIRELESS_JS"
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 38; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
+        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
         echo "✅ تمت إضافة قيم dBm بنجاح."
     fi
     awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
@@ -625,9 +621,8 @@ fi
 # 11. تخصيص الفوتر (Footer) لثيم Argon (Promax-NEt)
 # ==========================================
 for FOOTER_FILE in \
-    "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
-    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
-    "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
+    "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
 do
     if [ -f "$FOOTER_FILE" ]; then
         cat << 'EOF' > "$FOOTER_FILE"
@@ -637,7 +632,7 @@ do
 </div>
 <footer class="mobile-hide" style="text-wrap: auto">
 	<div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
-		<span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-wifi-770528863</span>
+		<span style="color: #5e72e4; font-weight: 500;">Powered by Promax-NEt</span>
 	</div>
 </footer>
 </main>
