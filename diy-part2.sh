@@ -53,7 +53,7 @@ uci -q set dhcp.lan.dhcpv6='disabled'
 uci -q set dhcp.lan.ndp='disabled'
 
 uci -q set network.lan.proto='static'
-uci -q set network.lan.ipaddr='192.168.1.20'
+uci -q set network.lan.ipaddr='192.168.1.21'
 uci -q set network.lan.netmask='255.255.255.0'
 uci -q set network.lan.dns='8.8.8.8 1.1.1.1'
 uci -q delete network.lan.gateway
@@ -127,7 +127,6 @@ if [ -f .config ]; then
     echo "CONFIG_PACKAGE_luci-theme-argon=y" >> .config
 fi
 
-# نسخ شعار argon.svg إلى مجلد الثيم وتوجيه القوالب إليه بأمان عبر awk
 ARGON_SVG=""
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
     ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
@@ -166,7 +165,6 @@ else
     echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في مجلد الجذر."
 fi
 
-# نسخ خلفية الثيم إن وُجدت
 BG_IMG=""
 if [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     BG_IMG="$GITHUB_WORKSPACE/bg.jpg"
@@ -204,20 +202,30 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تعديل wireless.js (dBm + Status + Current power + 160 MHz)
+# 5. تعديل wireless.js (dBm حتى 40 + Current power + 160 MHz)
 # ==========================================
 WIRELESS_JS=$(find feeds/luci package -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
     sed -i "s/\r//g" "$WIRELESS_JS"
+
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 38; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
-        echo "✅ تمت إضافة قيم dBm بنجاح."
+        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
+        echo "✅ تمت إضافة قيم dBm (حتى 40) بنجاح."
     fi
-    awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
+
+    sed -i 's/i<=38/i<=40/g; s/i <= 38/i <= 40/g' "$WIRELESS_JS"
+
+    awk '{
+        gsub(/this\.powerval=this\.wifiNetwork\?this\.wifiNetwork\.getTXPower\(\):null/, "this.powerval=(this.wifiNetwork?(uci.get(\"wireless\",this.wifiNetwork.getWifiDeviceName(),\"txpower\")||this.wifiNetwork.getTXPower()):null)");
+        gsub(/this\.powerval = this\.wifiNetwork \? this\.wifiNetwork\.getTXPower\(\) : null/, "this.powerval = (this.wifiNetwork ? (uci.get(\"wireless\", this.wifiNetwork.getWifiDeviceName(), \"txpower\") || this.wifiNetwork.getTXPower()) : null)");
+        gsub(/radioNet\.getTXPower\(\)/, "(uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\")");
+        print
+    }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
+
     sed -i "s/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g" "$WIRELESS_JS"
-    echo "✅ تم تعديل wireless.js بنجاح."
+    echo "✅ تم تعديل wireless.js وتحديث Current power بنجاح."
 else
     echo "⚠️ لم يتم العثور على wireless.js."
 fi
@@ -646,10 +654,13 @@ EOF
 done
 
 # ==========================================
-# 12. تفعيل حزمة wpad لتشغيل الواي فاي ومنع تعارض حزم wpad الأخرى
+# 12. تفعيل حزمة wpad و lldpd ومنع تعارض حزم wpad الأخرى
 # ==========================================
+./scripts/feeds update packages luci >/dev/null 2>&1 || true
+./scripts/feeds install lldpd luci-app-lldpd >/dev/null 2>&1 || true
+
 if [ -f .config ]; then
-    sed -i "/CONFIG_PACKAGE_wpad/d" .config
+    sed -i "/CONFIG_PACKAGE_wpad/d; /CONFIG_PACKAGE_lldpd/d; /CONFIG_PACKAGE_luci-app-lldpd/d" .config
     cat << 'EOF' >> .config
 # CONFIG_PACKAGE_wpad-basic is not set
 # CONFIG_PACKAGE_wpad-basic-wolfssl is not set
@@ -661,8 +672,10 @@ if [ -f .config ]; then
 # CONFIG_PACKAGE_wpad-wolfssl is not set
 # CONFIG_PACKAGE_wpad-openssl is not set
 CONFIG_PACKAGE_wpad=y
+CONFIG_PACKAGE_lldpd=y
+CONFIG_PACKAGE_luci-app-lldpd=y
 EOF
-    echo "✅ تم ضبط حزمة wpad لتشغيل الواي فاي ومنع التعارض."
+    echo "✅ تم ضبط حزمة wpad و lldpd ومنع التعارض."
 fi
 
 # ==========================================
