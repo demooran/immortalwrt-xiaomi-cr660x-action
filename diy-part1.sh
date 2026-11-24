@@ -3,7 +3,5 @@
 # Description: OpenWrt DIY script part 1 (Before Update feeds)
 # Target: OpenWrt 22.03 - Xiaomi CR6609 / MT7621
 
-set -e
-
-# إزالة أي نسخة سابقة لثيم Argon لضمان عدم التعارض مع حزمة 2.2.9 المدمجة في diy-part2.sh
-rm -rf package/luci-theme-argon
+# إزالة أي نسخة سابقة لثيم Argon أو إضافاته قبل تحديث/تثبيت الـ feeds
+rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon
