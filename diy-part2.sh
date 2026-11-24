@@ -7,7 +7,7 @@
 #
 # https://github.com/P3TERX/Actions-OpenWrt
 # File name: diy-part2.sh
-# Description: OpenWrt / ImmortalWrt DIY script part 2 for Xiaomi CR6609 (Promax AP)
+# Description: OpenWrt DIY script part 2 for Xiaomi CR6609 (Promax AP)
 #
 
 # ==========================================
@@ -113,29 +113,24 @@ EOF
 fi
 
 # ==========================================
-# 4. دمج ثيم argon_backup.tar.gz من جذر مشروع البناء وتخصيصه وتفعيله
+# 4. سحب ثيم luci-theme-argon من المستودع الرسمي وتفعيله
 # ==========================================
-rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
+rm -rf package/luci-theme-argon package/luci-app-argon-config \
        package/base-files/files/www/luci-static/argon \
-       package/base-files/files/usr/lib/lua/luci/view/themes/argon
+       package/base-files/files/usr/lib/lua/luci/view/themes/argon \
+       package/base-files/files/www/luci-static/resources/menu-argon.js \
+       files/www/luci-static/resources/menu-argon.js
+
+./scripts/feeds update luci >/dev/null 2>&1 || true
+./scripts/feeds install luci-theme-argon >/dev/null 2>&1 || true
 
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d; /CONFIG_PACKAGE_luci-app-argon-config/d" .config
-    echo "# CONFIG_PACKAGE_luci-theme-argon is not set" >> .config
-    echo "# CONFIG_PACKAGE_luci-app-argon-config is not set" >> .config
-fi
-
-mkdir -p package/base-files/files/etc/uci-defaults
-if [ -f "argon_backup.tar.gz" ]; then
-    tar -xzpf "argon_backup.tar.gz" -C package/base-files/files/
-    rm -rf package/base-files/files/tmp/luci-indexcache package/base-files/files/tmp/luci-modulecache package/base-files/files/tmp/luci-*
-    echo "✅ تم فك argon_backup.tar.gz من جذر مشروع البناء إلى package/base-files/files/."
-elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon_backup.tar.gz" ]; then
-    tar -xzpf "$GITHUB_WORKSPACE/argon_backup.tar.gz" -C package/base-files/files/
-    rm -rf package/base-files/files/tmp/luci-indexcache package/base-files/files/tmp/luci-modulecache package/base-files/files/tmp/luci-*
-    echo "✅ تم فك argon_backup.tar.gz من GITHUB_WORKSPACE."
-else
-    echo "⚠️ تحذير: لم يتم العثور على ملف argon_backup.tar.gz."
+    cat << 'EOF' >> .config
+CONFIG_PACKAGE_luci-theme-argon=y
+# CONFIG_PACKAGE_luci-app-argon-config is not set
+EOF
+    echo "✅ تم تفعيل سحب وبناء حزمة luci-theme-argon الرسمية."
 fi
 
 ARGON_SVG=""
@@ -145,10 +140,10 @@ elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
     ARGON_SVG="$GITHUB_WORKSPACE/argon.svg"
 fi
 
-if [ -n "$ARGON_SVG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
+if [ -n "$ARGON_SVG" ]; then
     mkdir -p package/base-files/files/www/luci-static/argon/img
     cp "$ARGON_SVG" package/base-files/files/www/luci-static/argon/img/argon.svg
-    echo "✅ تم نسخ شعار argon.svg إلى الثيم."
+    echo "✅ تم نسخ شعار argon.svg إلى شجرة الملفات."
 fi
 
 BG_IMG=""
@@ -158,10 +153,10 @@ elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
     BG_IMG="$GITHUB_WORKSPACE/bg.jpg"
 fi
 
-if [ -n "$BG_IMG" ] && [ -d "package/base-files/files/www/luci-static/argon" ]; then
+if [ -n "$BG_IMG" ]; then
     mkdir -p package/base-files/files/www/luci-static/argon/background
     cp "$BG_IMG" package/base-files/files/www/luci-static/argon/background/bg.jpg
-    echo "✅ تم نسخ خلفية bg.jpg إلى الثيم."
+    echo "✅ تم نسخ خلفية bg.jpg إلى شجرة الملفات."
 fi
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-enable-argon
@@ -609,7 +604,8 @@ fi
 for FOOTER_FILE in \
     "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
     "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
-    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm"
+    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer.ut"
 do
     if [ -f "$FOOTER_FILE" ]; then
         cat << 'EOF' > "$FOOTER_FILE"
