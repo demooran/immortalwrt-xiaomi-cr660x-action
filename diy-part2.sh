@@ -113,14 +113,16 @@ EOF
 fi
 
 # ==========================================
-# 4. جلب حزمة luci-theme-argon من المصدر وتخصيص الشعار والخلفية وتفعيل الثيم
+# 4. جلب حزمة luci-theme-argon (فرع Lua المتوافق مع 22.03) وتخصيصها وتفعيلها
 # ==========================================
 rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
        package/base-files/files/www/luci-static/argon \
        package/base-files/files/usr/lib/lua/luci/view/themes/argon
 
-git clone --depth=1 -b 22.03 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon 2>/dev/null || \
+git clone --depth=1 -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon || \
 git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+
+ls -la package/luci-theme-argon/luasrc/view/themes/argon/ 2>/dev/null || echo "⚠️ تحذير: لم يتم العثور على قوالب Lua للثيم"
 
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d" .config
@@ -150,7 +152,7 @@ if [ -n "$ARGON_SVG" ]; then
         "package/luci-theme-argon/ucode/template/themes/argon"
     do
         if [ -d "$VIEW_DIR" ]; then
-            for tpl in "$VIEW_DIR/login.htm" "$VIEW_DIR/header.htm" "$VIEW_DIR/login.ut" "$VIEW_DIR/header.ut"; do
+            for tpl in "$VIEW_DIR/login.htm" "$VIEW_DIR/header.htm" "$VIEW_DIR/sysauth.htm" "$VIEW_DIR/login.ut" "$VIEW_DIR/header.ut"; do
                 if [ -f "$tpl" ]; then
                     awk '{
                         gsub(/\/luci-static\/argon\/img\/[^" >)]*\.(png|jpg|jpeg|gif|svg|webp|PNG|JPG|JPEG|GIF|SVG|WEBP)/, "/luci-static/argon/img/argon.svg");
@@ -189,7 +191,7 @@ fi
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/98-argon-theme
 #!/bin/sh
-if [ -d /www/luci-static/argon ]; then
+if [ -d /usr/lib/lua/luci/view/themes/argon ] || [ -d /www/luci-static/argon ]; then
     uci -q set luci.main.mediaurlbase='/luci-static/argon'
     uci -q set argon.@global[0].bing_background='0'
     uci -q set argon.@global[0].mode='normal'
