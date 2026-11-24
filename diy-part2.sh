@@ -116,7 +116,10 @@ fi
 # 4. ضبط وتفعيل ثيم luci-theme-argon المجلوب في diy-part1.sh
 # ==========================================
 rm -rf package/luci-app-argon-config \
+       package/base-files/files/www/luci-static/argon \
+       package/base-files/files/usr/lib/lua/luci/view/themes/argon \
        package/base-files/files/www/luci-static/resources/menu-argon.js \
+       files/www/luci-static/argon \
        files/www/luci-static/resources/menu-argon.js
 
 if [ ! -d "package/luci-theme-argon" ]; then
@@ -132,6 +135,8 @@ EOF
     echo "✅ تم تفعيل بناء حزمة luci-theme-argon من المصدر الرسمي."
 fi
 
+mkdir -p package/base-files/files/etc/promax-argon
+
 ARGON_SVG=""
 if [ -f "argon.svg" ]; then
     ARGON_SVG="argon.svg"
@@ -140,9 +145,8 @@ elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/argon.svg" ]; then
 fi
 
 if [ -n "$ARGON_SVG" ]; then
-    mkdir -p package/base-files/files/www/luci-static/argon/img
-    cp "$ARGON_SVG" package/base-files/files/www/luci-static/argon/img/argon.svg
-    echo "✅ تم نسخ شعار argon.svg إلى شجرة الملفات."
+    cp "$ARGON_SVG" package/base-files/files/etc/promax-argon/argon.svg
+    echo "✅ تم حفظ شعار argon.svg مؤقتاً في /etc/promax-argon/ لتجنب تعارض opkg."
 fi
 
 BG_IMG=""
@@ -153,13 +157,22 @@ elif [ -n "$GITHUB_WORKSPACE" ] && [ -f "$GITHUB_WORKSPACE/bg.jpg" ]; then
 fi
 
 if [ -n "$BG_IMG" ]; then
-    mkdir -p package/base-files/files/www/luci-static/argon/background
-    cp "$BG_IMG" package/base-files/files/www/luci-static/argon/background/bg.jpg
-    echo "✅ تم نسخ خلفية bg.jpg إلى شجرة الملفات."
+    cp "$BG_IMG" package/base-files/files/etc/promax-argon/bg.jpg
+    echo "✅ تم حفظ خلفية bg.jpg مؤقتاً في /etc/promax-argon/ لتجنب تعارض opkg."
 fi
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-enable-argon
 #!/bin/sh
+if [ -f /etc/promax-argon/argon.svg ] && [ -d /www/luci-static/argon ]; then
+    mkdir -p /www/luci-static/argon/img
+    cp -f /etc/promax-argon/argon.svg /www/luci-static/argon/img/argon.svg
+fi
+
+if [ -f /etc/promax-argon/bg.jpg ] && [ -d /www/luci-static/argon ]; then
+    mkdir -p /www/luci-static/argon/background
+    cp -f /etc/promax-argon/bg.jpg /www/luci-static/argon/background/bg.jpg
+fi
+
 if [ -d /www/luci-static/argon ] || [ -d /usr/lib/lua/luci/view/themes/argon ]; then
     uci -q set luci.main.theme='argon'
     uci -q set luci.main.mediaurlbase='/luci-static/argon'
