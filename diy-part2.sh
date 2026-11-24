@@ -217,7 +217,7 @@ if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
         echo "✅ تمت إضافة قيم dBm (حتى 40) بنجاح."
     fi
 
-    sed -i 's/i<=38/i<=40/g; s/i <= 38/i <= 40/g' "$WIRELESS_JS"
+    sed -i "s/i<=38/i<=40/g; s/i <= 38/i <= 40/g" "$WIRELESS_JS"
 
     awk '{
         gsub(/this\.powerval=this\.wifiNetwork\?this\.wifiNetwork\.getTXPower\(\):null/, "this.powerval=(this.wifiNetwork?(uci.get(\"wireless\",this.wifiNetwork.getWifiDeviceName(),\"txpower\")||this.wifiNetwork.getTXPower()):null)");
@@ -509,7 +509,7 @@ return view.extend({
 			is_too_big = (storage_size > 0 && res[0].size > storage_size),
 			body = [];
 
-			body.push(E('p', _("The flash image was uploaded. Below is the checksum and file size listed, compare them with the original file to ensure data integrity. <br /> Click 'Continue' below to start the flash procedure.")));
+			body.push(E('p', {}, _('The flash image was uploaded. Below is the checksum and file size listed, compare them with the original file to ensure data integrity. <br /> Click "Continue" below to start the flash procedure.')));
 			body.push(E('ul', {}, [
 				res[0].size ? E('li', {}, '%s: %1024.2mB'.format(_('Size'), res[0].size)) : '',
 				res[0].checksum ? E('li', {}, '%s: %s'.format(_('MD5'), res[0].checksum)) : '',
@@ -747,8 +747,48 @@ else
 fi
 
 # ==========================================
-# 16. تسلسل إضاءة LEDs عند الإقلاع والاستقرار وضبط المؤشرات
+# 16. تسلسل إضاءة LEDs عند الإقلاع والاستقرار وضبط المؤشرات + DTS
 # ==========================================
+echo "🔍 البحث عن ملفات DTS الخاصة باللمبات والجهاز..."
+grep -rnE "yellow:sys|yellow:net|blue:sys|blue:net" target/linux/ramips/dts/ 2>/dev/null || true
+find target/linux/ramips/dts/ -maxdepth 1 \( -iname "*6609*" -o -iname "*1806*" -o -iname "*xiaomi*" -o -iname "*h3c*" \) 2>/dev/null || true
+
+DTS_FILES=$(grep -rnE "yellow:sys|yellow:net" target/linux/ramips/dts/ 2>/dev/null | cut -d: -f1 | sort -u)
+if [ -z "$DTS_FILES" ]; then
+    DTS_FILES=$(find target/linux/ramips/dts/ -maxdepth 1 \( -iname "*6609*" -o -iname "*1806*" -o -iname "*xiaomi*" -o -iname "*h3c*" \) 2>/dev/null | head -n 5)
+fi
+
+for dts in $DTS_FILES; do
+    if [ -f "$dts" ]; then
+        echo "🔧 تعديل ملف DTS مبكر للـ LEDs: $dts"
+        python3 - "$dts" << 'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    content = f.read()
+
+def patch_led_block(match):
+    block = match.group(0)
+    if re.search(r'label\s*=\s*"yellow:(sys|net)"', block):
+        if 'default-state' not in block:
+            block = re.sub(r'(\n\s*)(};)', r'\1\tdefault-state = "on";\1\2', block)
+        else:
+            block = re.sub(r'default-state\s*=\s*"[^"]*"', 'default-state = "on"', block)
+    return block
+
+new_content = re.sub(r'[a-zA-Z0-9_-]+\s*\{[^{}]*label\s*=\s*"yellow:(sys|net)"[^{}]*\};', patch_led_block, content, flags=re.DOTALL)
+
+if new_content != content:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_content)
+    print(f'  ✅ تم تفعيل default-state = "on" للمبات البرتقالية في {path}')
+else:
+    print(f'  ℹ️ لم يتم العثور على كتلة مطابقة أو كانت معدّلة مسبقاً في {path}')
+PYEOF
+    fi
+done
+
 mkdir -p package/base-files/files/usr/bin
 cat << 'EOF' > package/base-files/files/usr/bin/promax-led-boot.sh
 #!/bin/sh
@@ -780,35 +820,45 @@ set_led() {
     fi
 }
 
+wait_step() {
+    if command -v usleep >/dev/null 2>&1; then
+        usleep 350000
+    else
+        sleep 1
+    fi
+}
+
 (
-    sleep 3
     VY1=$(max_val "$LED_Y1")
     VY2=$(max_val "$LED_Y2")
     VB1=$(max_val "$LED_B1")
+    VB2=$(max_val "$LED_B2")
 
     set_led "$LED_B1" "none" 0
     set_led "$LED_B2" "none" 0
     set_led "$LED_Y1" "none" 0
     set_led "$LED_Y2" "none" 0
 
-    set_led "$LED_Y1" "none" "$VY1"
+    # 1) تشغيل اللمبتين البرتقاليتين معاً بشكل ثابت لمدة 3 ثوانٍ
+    echo "$VY1" > "/sys/class/leds/$LED_Y1/brightness" 2>/dev/null || true
+    echo "$VY2" > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
     sleep 3
 
-    set_led "$LED_Y1" "none" 0
-    set_led "$LED_Y2" "none" 0
+    # 2) إطفاء اللمبة الثانية وجعل لمبة واحدة (yellow:sys) تعمل/تومض بالبرتقالي
+    echo 0 > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
     i=0
-    while [ $i -lt 8 ]; do
+    while [ $i -lt 5 ]; do
         echo "$VY1" > "/sys/class/leds/$LED_Y1/brightness" 2>/dev/null || true
-        echo "$VY2" > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
-        sleep 0.35
+        wait_step
         echo 0 > "/sys/class/leds/$LED_Y1/brightness" 2>/dev/null || true
-        echo 0 > "/sys/class/leds/$LED_Y2/brightness" 2>/dev/null || true
-        sleep 0.35
+        wait_step
         i=$((i + 1))
     done
 
+    # 3) الاستقرار والعودة إلى اللون الأزرق وإطفاء البرتقالي نهائياً
     set_led "$LED_Y1" "none" 0
     set_led "$LED_Y2" "none" 0
+
     set_led "$LED_B1" "default-on" "$VB1"
     if [ ! -f "/sys/class/leds/$LED_B1/trigger" ]; then
         echo "$VB1" > "/sys/class/leds/$LED_B1/brightness" 2>/dev/null || true
@@ -820,18 +870,34 @@ set_led() {
         [ -f "/sys/class/leds/$LED_B2/link" ] && echo 1 > "/sys/class/leds/$LED_B2/link" 2>/dev/null || true
         [ -f "/sys/class/leds/$LED_B2/tx" ] && echo 1 > "/sys/class/leds/$LED_B2/tx" 2>/dev/null || true
         [ -f "/sys/class/leds/$LED_B2/rx" ] && echo 1 > "/sys/class/leds/$LED_B2/rx" 2>/dev/null || true
+    else
+        echo "$VB2" > "/sys/class/leds/$LED_B2/brightness" 2>/dev/null || true
     fi
+
+    sleep 5
+    set_led "$LED_Y1" "none" 0
+    set_led "$LED_Y2" "none" 0
 ) >/dev/null 2>&1 &
 exit 0
 EOF
 chmod +x package/base-files/files/usr/bin/promax-led-boot.sh
+
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/99-promax-led
+#!/bin/sh
+if uci -q get system.led_internet >/dev/null 2>&1; then
+    uci set system.led_internet.dev='br-lan'
+    uci commit system
+fi
+exit 0
+EOF
+chmod +x package/base-files/files/etc/uci-defaults/99-promax-led
 
 if [ -f package/base-files/files/etc/rc.local ]; then
     if ! grep -q "promax-led-boot.sh" package/base-files/files/etc/rc.local; then
         sed -i "/exit 0/i /usr/bin/promax-led-boot.sh" package/base-files/files/etc/rc.local
     fi
 fi
-echo "✅ تم إعداد تسلسل LEDs عند الإقلاع بنجاح."
+echo "✅ تم إعداد تسلسل LEDs وتعديل ملفات DTS بنجاح."
 
 # ==========================================
 # 17. إزالة علامة الصح من Enable NTP client وحذف إدخالات NTP server candidates
