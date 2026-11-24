@@ -113,16 +113,15 @@ EOF
 fi
 
 # ==========================================
-# 4. سحب ثيم luci-theme-argon من المستودع الرسمي وتفعيله
+# 4. ضبط وتفعيل ثيم luci-theme-argon المجلوب في diy-part1.sh
 # ==========================================
-rm -rf package/luci-theme-argon package/luci-app-argon-config \
-       package/base-files/files/www/luci-static/argon \
-       package/base-files/files/usr/lib/lua/luci/view/themes/argon \
+rm -rf package/luci-app-argon-config \
        package/base-files/files/www/luci-static/resources/menu-argon.js \
        files/www/luci-static/resources/menu-argon.js
 
-./scripts/feeds update luci >/dev/null 2>&1 || true
-./scripts/feeds install luci-theme-argon >/dev/null 2>&1 || true
+if [ ! -d "package/luci-theme-argon" ]; then
+    git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon || true
+fi
 
 if [ -f .config ]; then
     sed -i "/CONFIG_PACKAGE_luci-theme-argon/d; /CONFIG_PACKAGE_luci-app-argon-config/d" .config
@@ -130,7 +129,7 @@ if [ -f .config ]; then
 CONFIG_PACKAGE_luci-theme-argon=y
 # CONFIG_PACKAGE_luci-app-argon-config is not set
 EOF
-    echo "✅ تم تفعيل سحب وبناء حزمة luci-theme-argon الرسمية."
+    echo "✅ تم تفعيل بناء حزمة luci-theme-argon من المصدر الرسمي."
 fi
 
 ARGON_SVG=""
@@ -161,14 +160,16 @@ fi
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/96-enable-argon
 #!/bin/sh
-if [ -d /usr/lib/lua/luci/view/themes/argon ] || [ -d /www/luci-static/argon ]; then
-    uci -q set luci.main.theme='Argon'
+if [ -d /www/luci-static/argon ] || [ -d /usr/lib/lua/luci/view/themes/argon ]; then
+    uci -q set luci.main.theme='argon'
     uci -q set luci.main.mediaurlbase='/luci-static/argon'
-    uci -q set argon.@global[0].bing_background='0'
-    uci -q set argon.@global[0].mode='normal'
+    uci -q set argon.@global[0].bing_background='0' 2>/dev/null || true
+    uci -q set argon.@global[0].mode='normal' 2>/dev/null || true
     uci commit luci
-    uci -q commit argon
+    uci -q commit argon 2>/dev/null || true
     rm -rf /tmp/luci-indexcache /tmp/luci-modulecache /tmp/luci-*
+    /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+    /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 fi
 exit 0
 EOF
@@ -604,6 +605,7 @@ fi
 for FOOTER_FILE in \
     "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
     "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "package/luci-theme-argon/ucode/template/themes/argon/footer.ut" \
     "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
     "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer.ut"
 do
@@ -629,7 +631,7 @@ EOF
 done
 
 # ==========================================
-# 12. تفعيل حزمة wpad و lldpd ومنع تعارض حزم wpad الأخرى
+# 12. تفعيل حزمة wpad-mbedtls و lldpd ومنع تعارض حزم wpad الأخرى
 # ==========================================
 ./scripts/feeds update packages luci >/dev/null 2>&1 || true
 ./scripts/feeds install lldpd luci-app-lldpd >/dev/null 2>&1 || true
@@ -643,14 +645,13 @@ if [ -f .config ]; then
 # CONFIG_PACKAGE_wpad-mini is not set
 # CONFIG_PACKAGE_wpad-mesh-wolfssl is not set
 # CONFIG_PACKAGE_wpad-mesh-mbedtls is not set
-# CONFIG_PACKAGE_wpad-mbedtls is not set
 # CONFIG_PACKAGE_wpad-wolfssl is not set
 # CONFIG_PACKAGE_wpad-openssl is not set
-CONFIG_PACKAGE_wpad=y
+CONFIG_PACKAGE_wpad-mbedtls=y
 CONFIG_PACKAGE_lldpd=y
 CONFIG_PACKAGE_luci-app-lldpd=y
 EOF
-    echo "✅ تم ضبط حزمة wpad و lldpd ومنع التعارض."
+    echo "✅ تم ضبط حزمة wpad-mbedtls و lldpd ومنع التعارض."
 fi
 
 # ==========================================
