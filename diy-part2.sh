@@ -113,14 +113,20 @@ EOF
 fi
 
 # ==========================================
-# 4. جلب حزمة luci-theme-argon (فرع Lua المتوافق مع 22.03) وتخصيصها وتفعيلها
+# 4. جلب حزمة luci-theme-argon وتخصيصها وتفعيلها بأمان
 # ==========================================
 rm -rf package/luci-theme-argon package/luci-app-argon-config feeds/luci/themes/luci-theme-argon \
        package/base-files/files/www/luci-static/argon \
        package/base-files/files/usr/lib/lua/luci/view/themes/argon
 
-git clone --depth=1 -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon || \
-git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+git clone --depth=1 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon || \
+git clone --depth=1 -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git package/luci-theme-argon
+
+for ARGON_TPL in $(find package/luci-theme-argon -type f \( -name "*.htm" -o -name "*.lua" \) 2>/dev/null); do
+    if grep -q "node_childs" "$ARGON_TPL"; then
+        sed -i 's/\([a-zA-Z0-9_.]*\):node_childs(\([^)]*\))/(\1.node_childs and \1:node_childs(\2) or {})/g; s/\([a-zA-Z0-9_.]*\)\.node_childs/(\1.node_childs or {})/g' "$ARGON_TPL"
+    fi
+done
 
 ls -la package/luci-theme-argon/luasrc/view/themes/argon/ 2>/dev/null || echo "⚠️ تحذير: لم يتم العثور على قوالب Lua للثيم"
 
