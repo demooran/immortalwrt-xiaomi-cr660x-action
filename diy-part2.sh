@@ -904,27 +904,30 @@ chmod +x package/base-files/files/etc/uci-defaults/94-promax-ntp-clean
 echo "✅ تم إعداد تعطيل NTP client وحذف NTP server candidates."
 
 # ==========================================
-# 18. جعل زر WPS (و Mesh) يقوم بعمل فورمات (10s+) وتعطيل زر Reset الخلفي (بدون تعارض مع hostapd-common)
+# 18. جعل زر WPS (و Mesh) يقوم بعمل فورمات (10s+) وتعطيل زر Reset الخلفي
 # ==========================================
 rm -f package/base-files/files/etc/rc.button/wps \
       package/base-files/files/etc/rc.button/mesh \
       files/etc/rc.button/wps \
       files/etc/rc.button/mesh
 
-mkdir -p package/base-files/files/usr/bin package/base-files/files/etc/uci-defaults package/base-files/files/etc/rc.button files/etc/rc.button
+mkdir -p package/base-files/files/usr/bin \
+         package/base-files/files/etc/uci-defaults \
+         package/base-files/files/etc/rc.button \
+         files/etc/rc.button
 
 cat << 'EOF' > package/base-files/files/usr/bin/promax-wps-reset.sh
 #!/bin/sh
 
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 . /lib/functions.sh
 
-logger "$BUTTON pressed for $SEEN seconds"
+SEEN_NUM=$(printf '%s' "${SEEN:-0}" | tr -cd '0-9')
+[ -z "$SEEN_NUM" ] && SEEN_NUM=0
 
-if [ "$ACTION" = "released" ]; then
-    if [ "$SEEN" -ge 10 ]; then
-        echo "FACTORY RESET via front button ($BUTTON) after ${SEEN}s" > /dev/console
-        jffs2reset -y && reboot &
-    fi
+if [ "${ACTION:-}" = "released" ] && [ "$SEEN_NUM" -ge 10 ]; then
+    echo "FACTORY RESET via front button (${BUTTON:-wps}) after ${SEEN_NUM}s" > /dev/console 2>/dev/null || true
+    /sbin/jffs2reset -y && /sbin/reboot -f &
 fi
 
 return 0
@@ -934,12 +937,21 @@ chmod +x package/base-files/files/usr/bin/promax-wps-reset.sh
 cat << 'EOF' > package/base-files/files/etc/rc.button/reset
 #!/bin/sh
 
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 . /lib/functions.sh
 
-logger "Rear reset button ($BUTTON) is disabled"
 return 0
 EOF
 chmod +x package/base-files/files/etc/rc.button/reset
+
+cat << 'EOF' > package/base-files/files/etc/rc.button/wps
+#!/bin/sh
+exec /usr/bin/promax-wps-reset.sh
+EOF
+chmod +x package/base-files/files/etc/rc.button/wps
+
+cp -f package/base-files/files/etc/rc.button/wps package/base-files/files/etc/rc.button/mesh
+chmod +x package/base-files/files/etc/rc.button/mesh
 
 cat << 'EOF' > package/base-files/files/etc/uci-defaults/92-promax-buttons
 #!/bin/sh
@@ -953,11 +965,21 @@ chmod +x /etc/rc.button/wps
 
 cp -f /etc/rc.button/wps /etc/rc.button/mesh
 chmod +x /etc/rc.button/mesh
+
+cat << 'RST' > /etc/rc.button/reset
+#!/bin/sh
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+. /lib/functions.sh
+return 0
+RST
+chmod +x /etc/rc.button/reset
 exit 0
 EOF
 chmod +x package/base-files/files/etc/uci-defaults/92-promax-buttons
 
-cp -f package/base-files/files/etc/rc.button/reset files/etc/rc.button/reset 2>/dev/null || true
-chmod +x files/etc/rc.button/reset 2>/dev/null || true
+cp -f package/base-files/files/etc/rc.button/wps files/etc/rc.button/wps
+cp -f package/base-files/files/etc/rc.button/mesh files/etc/rc.button/mesh
+cp -f package/base-files/files/etc/rc.button/reset files/etc/rc.button/reset
+chmod +x files/etc/rc.button/wps files/etc/rc.button/mesh files/etc/rc.button/reset
 
-echo "✅ تم إعداد زر WPS للفرمتة (10 ثوانٍ+) وتعطيل زر reset الخلفي بدون تعارض مع hostapd-common."
+echo "✅ تم إعداد زر WPS للفرمتة (10 ثوانٍ+) وتعطيل زر reset الخلفي."
