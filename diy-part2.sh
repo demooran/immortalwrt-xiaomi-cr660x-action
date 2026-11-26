@@ -11,10 +11,22 @@
 #
 
 # ==========================================
-# 1. تعيين اسم الجهاز (Hostname)
+# 1. تعيين اسم الجهاز (Hostname) والمنطقة الزمنية
 # ==========================================
-sed -i 's/OpenWrt/hosam.AX/g' package/base-files/files/bin/config_generate
-sed -i 's/ImmortalWrt/hosam.AX/g' package/base-files/files/bin/config_generate
+if [ -f package/base-files/files/bin/config_generate ]; then
+    sed -i "s/OpenWrt/hosam.AX/g; s/ImmortalWrt/hosam.AX/g" package/base-files/files/bin/config_generate
+fi
+
+mkdir -p package/base-files/files/etc/uci-defaults files/etc/uci-defaults
+cat << 'EOF' > package/base-files/files/etc/uci-defaults/93-set-hostname
+#!/bin/sh
+uci -q set system.@system[0].hostname='hosam.AX'
+uci -q set system.@system[0].zonename='Asia/Aden'
+uci -q set system.@system[0].timezone='<+03>-3'
+uci commit system
+exit 0
+EOF
+chmod +x package/base-files/files/etc/uci-defaults/93-set-hostname
 
 # ==========================================
 # 2. إعدادات الواي فاي الافتراضية (تفعيل الراديو)
@@ -46,7 +58,7 @@ uci set dhcp.lan.ndp=disabled
 
 # 4. تعيين IP ثابت و DNS (بدون Gateway)
 uci set network.lan.proto='static'
-uci set network.lan.ipaddr='192.168.1.20'
+uci set network.lan.ipaddr='192.168.1.21'
 uci set network.lan.netmask='255.255.255.0'
 uci set network.lan.dns='8.8.8.8 1.1.1.1'
 uci delete network.lan.gateway 2>/dev/null || true
@@ -130,34 +142,30 @@ EOF
 chmod +x package/base-files/files/etc/uci-defaults/98-argon-theme
 
 # ==========================================
-# 5. تعديل wireless.js (dBm + Status + Current power + 160 MHz)
+# 5. تعديل wireless.js (dBm حتى 40 + Current power + 160 MHz)
 # ==========================================
-WIRELESS_JS=$(find . -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
+WIRELESS_JS=$(find feeds/luci package -name "wireless.js" -path "*network*" 2>/dev/null | head -n 1)
 
 if [ -n "$WIRELESS_JS" ] && [ -f "$WIRELESS_JS" ]; then
     echo "تم العثور على wireless.js في: $WIRELESS_JS"
+    sed -i "s/\r//g" "$WIRELESS_JS"
 
-    # تنظيف الملف من الرموز الخفية لمنع أخطاء الـ sed
-    sed -i 's/\r//g' "$WIRELESS_JS"
-
-    # توسيع قائمة الـ dBm لتشمل القيم من 27 إلى 40
     if grep -q "for (var i = 0; i < pwrlist.length; i++)" "$WIRELESS_JS"; then
-        sed -i 's|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 40; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g' "$WIRELESS_JS"
-        echo "✅ تمت إضافة قيم dBm بنجاح."
+        sed -i "s|for (var i = 0; i < pwrlist.length; i++)|for (var i = 27; i <= 38; i++) { pwrlist.push({dbm: i, mw: Math.round(Math.pow(10, (i-30)/10) * 1000)}); }; pwrlist = pwrlist.filter((v,i,a)=>a.findIndex(t=>(t.dbm===v.dbm))===i); for (var i = 0; i < pwrlist.length; i++)|g" "$WIRELESS_JS"
+        echo "✅ تمت إضافة قيم dBm (حتى 40) بنجاح."
     fi
 
-    # مطابقة وربط القيمة الحالية في Status بشكل ديناميكي لكل راديو (2.4G و 5G) عبر awk
-    awk '{ gsub(/radioNet\.getTXPower\(\)/, "uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\""); print }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
+    sed -i "s/i<=38/i<=40/g; s/i <= 38/i <= 40/g" "$WIRELESS_JS"
 
-    # ربط Current power بقيمة UCI وتحديثه لحظياً عند تغيير القائمة بأسلوب sed المباشر
-    sed -i "s/this\.powerval=this\.wifiNetwork?this\.wifiNetwork\.getTXPower():null;/var _u=uci.get('wireless',section_id,'txpower');this.powerval=(_u!=null\&\&_u!=='')?parseInt(_u,10):(this.wifiNetwork?this.wifiNetwork.getTXPower():36);/" "$WIRELESS_JS"
-    sed -i "s/E('span',\[this\.powerval!=null?'%d dBm'\.format(this\.powerval):E('em',_('unknown'))\])/E('span',{'class':'ah-pwr'},[this.powerval!=null?this.powerval+' dBm':'36 dBm'])/" "$WIRELESS_JS"
-    sed -i "s/widget\.firstElementChild\.style\.width='auto';/var _s=widget.firstElementChild;if(_s){_s.style.width='auto';_s.addEventListener('change',function(){var _t=widget.querySelector('.ah-pwr');if(_t\&\&_s.value!=='')_t.textContent=_s.value+' dBm';});}/" "$WIRELESS_JS"
+    awk '{
+        gsub(/this\.powerval=this\.wifiNetwork\?this\.wifiNetwork\.getTXPower\(\):null/, "this.powerval=(this.wifiNetwork?(uci.get(\"wireless\",this.wifiNetwork.getWifiDeviceName(),\"txpower\")||this.wifiNetwork.getTXPower()):null)");
+        gsub(/this\.powerval = this\.wifiNetwork \? this\.wifiNetwork\.getTXPower\(\) : null/, "this.powerval = (this.wifiNetwork ? (uci.get(\"wireless\", this.wifiNetwork.getWifiDeviceName(), \"txpower\") || this.wifiNetwork.getTXPower()) : null)");
+        gsub(/radioNet\.getTXPower\(\)/, "(uci.get(\"wireless\", radioNet.getWifiDeviceName(), \"txpower\") || \"36\")");
+        print
+    }' "$WIRELESS_JS" > "$WIRELESS_JS.tmp" && mv "$WIRELESS_JS.tmp" "$WIRELESS_JS"
 
-    # إظهار خيار 160 MHz في قائمة Width لأنماط AC و AX
-    sed -i 's/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g' "$WIRELESS_JS"
-    echo "✅ تم تعديل Status و Current power و 160 MHz وتوافق الطاقة ديناميكياً بنجاح."
-
+    sed -i "s/htmodelist\.VHT160/true/g; s/htmodelist\.HE160/true/g" "$WIRELESS_JS"
+    echo "✅ تم تعديل wireless.js وتحديث Current power بنجاح."
 else
     echo "⚠️ لم يتم العثور على wireless.js."
 fi
@@ -567,37 +575,29 @@ EOF
 fi
 
 # ==========================================
-# 11. تخصيص الفوتر (Footer) لثيم Argon باللون الأزرق مع الحفاظ على القوائم والسكربتات
+# 11. تخصيص الفوتر (Footer) لثيم Argon (Ahosam-wifi-770528863)
 # ==========================================
 for FOOTER_FILE in \
-    "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer.ut" \
-    "package/luci-theme-argon/ucode/template/themes/argon/footer.ut"
+    "package/base-files/files/usr/lib/lua/luci/view/themes/argon/footer.htm" \
+    "package/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "package/luci-theme-argon/ucode/template/themes/argon/footer.ut" \
+    "feeds/luci/themes/luci-theme-argon/luasrc/view/themes/argon/footer.htm" \
+    "feeds/luci/themes/luci-theme-argon/ucode/template/themes/argon/footer.ut"
 do
     if [ -f "$FOOTER_FILE" ]; then
         cat << 'EOF' > "$FOOTER_FILE"
-{#
-        Argon is a clean HTML5 theme for LuCI. It is based on luci-theme-material Argon Template
-        luci-theme-argon
-        Copyright 2020 Jerrykuku <jerrykuku@qq.com>
-        Have a bug? Please create an issue here on GitHub!
-        https://github.com/jerrykuku/luci-theme-argon/issues
-        luci-theme-material:
-        Copyright 2015 Lutty Yang <lutty@wcan.in>
-        Agron Theme
-        https://demos.creative-tim.com/argon-dashboard/index.html
-        Licensed to the public under the Apache License 2.0
--#}
-                </div>
-                <footer class="mobile-hide" style="text-wrap: auto">
-                        <div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
-                                <span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-WIFI | 770528863 : للتواصل</span>
-                                <ul class="breadcrumb pull-right" id="modemenu" style="display:none"></ul>
-                        </div>
-                </footer>
-        </main>
+<%#
+ Argon theme footer
+-%>
+</div>
+<footer class="mobile-hide" style="text-wrap: auto">
+	<div class="footer-content" style="display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: end;">
+		<span style="color: #5e72e4; font-weight: 500;">Powered by Ahosam-wifi-770528863</span>
+	</div>
+</footer>
+</main>
 </div>
 </div>
-{% include('themes/' + theme + '/page_scripts', { is_login: false }) %}
 </body>
 </html>
 EOF
@@ -695,7 +695,7 @@ if [ -f "$GITHUB_WORKSPACE/quicksetup_backup.tar.gz" ]; then
     chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
 
     mkdir -p package/base-files/files/etc/uci-defaults
-    cat <<  EOF  > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
+    cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-quicksetup
 #!/bin/sh
 if [ -x /etc/init.d/wizard ]; then
     /etc/init.d/wizard enable 2>/dev/null || true
@@ -708,4 +708,29 @@ EOF
     echo "✅ تم دمج إضافة quicksetup وتفعيل خدمة wizard بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف quicksetup_backup.tar.gz في المستودع."
+fi
+
+# ==========================================
+# 16. استبدال صورة argon.svg في صفحة الدخول لثيم Argon
+# ==========================================
+ARGON_SVG_SRC="$GITHUB_WORKSPACE/argon.svg"
+if [ -f "$ARGON_SVG_SRC" ]; then
+    mkdir -p package/base-files/files/www/luci-static/argon/img
+    cp -f "$ARGON_SVG_SRC" package/base-files/files/www/luci-static/argon/img/argon.svg
+
+    for SVG_TARGET in \
+        "package/luci-theme-argon/htdocs/luci-static/argon/img/argon.svg" \
+        "feeds/luci/themes/luci-theme-argon/htdocs/luci-static/argon/img/argon.svg" \
+        "package/luci-theme-argon/root/www/luci-static/argon/img/argon.svg" \
+        "feeds/luci/themes/luci-theme-argon/root/www/luci-static/argon/img/argon.svg"
+    do
+        if [ -f "$SVG_TARGET" ]; then
+            cp -f "$ARGON_SVG_SRC" "$SVG_TARGET"
+            echo "✅ تم تحديث: $SVG_TARGET"
+        fi
+    done
+
+    echo "✅ تم دمج صورة argon.svg بنجاح."
+else
+    echo "⚠️ تحذير: لم يتم العثور على ملف argon.svg في $GITHUB_WORKSPACE."
 fi
