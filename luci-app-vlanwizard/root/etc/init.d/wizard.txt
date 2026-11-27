@@ -1,0 +1,186 @@
+#!/bin/sh /etc/rc.common
+START=19
+STOP=10
+
+EXTRA_COMMANDS="apply clean autofill list test"
+
+boot() { autofill; exit 0; }
+
+get_radios() {
+    local radio band
+    RADIO_2G=""
+    RADIO_5G=""
+    for radio in radio0 radio1 radio2 radio3; do
+        uci -q get wireless.$radio >/dev/null 2>&1 || continue
+        band=$(uci -q get wireless.$radio.band)
+        case "$band" in
+            2g) [ -z "$RADIO_2G" ] && RADIO_2G="$radio" ;;
+            5g) [ -z "$RADIO_5G" ] && RADIO_5G="$radio" ;;
+        esac
+    done
+}
+
+clean_all() {
+    local iface
+    # حذف جميع واجهات الواي فاي (AP والميش القديمة بالكامل)
+    for iface in $(uci show wireless 2>/dev/null | grep "=wifi-iface" | cut -d. -f2 | cut -d= -f1); do
+        uci -q delete wireless.$iface
+    done
+    
+    # حذف جميع إعدادات أجهزة الفيلان والجسور (Bridges) القديمة
+    local v
+    for v in $(uci show network 2>/dev/null | grep -E "vlan|brvlan" | cut -d. -f2 | cut -d= -f1 | sort -u); do
+        uci -q delete network.$v
+    done
+    for d in $(uci show network 2>/dev/null | grep "\.type='8021q'" | cut -d. -f2); do
+        uci -q delete network.$d
+    done
+
+    uci -q commit wireless
+    uci -q commit network
+}
+
+set_vlan() {
+    local vlan="$1"
+    uci -q delete network.vlan_${vlan}
+    uci -q delete network.vlan${vlan}
+    uci -q delete network.brvlan${vlan}
+
+    uci set network.vlan_${vlan}=device
+    uci set network.vlan_${vlan}.type="8021q"
+    uci set network.vlan_${vlan}.name="br-lan.${vlan}"
+    uci set network.vlan_${vlan}.ifname="br-lan"
+    uci set network.vlan_${vlan}.vid="${vlan}"
+
+    uci set network.brvlan${vlan}=device
+    uci set network.brvlan${vlan}.type="bridge"
+    uci set network.brvlan${vlan}.name="brvlan${vlan}"
+    uci set network.brvlan${vlan}.ports="br-lan.${vlan}"
+
+    uci set network.vlan${vlan}=interface
+    uci set network.vlan${vlan}.proto="none"
+    uci set network.vlan${vlan}.device="brvlan${vlan}"
+    uci set network.vlan${vlan}.auto="1"
+}
+
+set_radio() {
+    local radio="$1" channel="$2"
+    uci -q get wireless.$radio >/dev/null 2>&1 || return
+    uci set wireless.$radio.disabled="0"
+    if [ -n "$channel" ] && [ "$channel" != "auto" ]; then
+        uci set wireless.$radio.channel="$channel"
+    fi
+}
+
+autofill() {
+    local cur_ssid cur_meshid cur_ip cur_vlan
+    
+    cur_ssid=$(uci -q get wireless.ap_2g.ssid)
+    [ -n "$cur_ssid" ] && uci -q set wizard.default.SSID2G="$cur_ssid"
+
+    cur_meshid=$(uci -q get wireless.mesh.mesh_id)
+    [ -z "$cur_meshid" ] && {
+        cur_meshid=$(uci show wireless 2>/dev/null | grep "\.mode='mesh'" | head -n 1 | cut -d. -f2)
+        [ -n "$cur_meshid" ] && cur_meshid=$(uci -q get wireless.$cur_meshid.mesh_id)
+    }
+    [ -n "$cur_meshid" ] && uci -q set wizard.default.MESHID="$cur_meshid"
+
+    cur_ip=$(uci -q get network.lan.ipaddr)
+    [ -n "$cur_ip" ] && uci -q set wizard.default.IPADD="$cur_ip"
+
+    cur_vlan=$(uci show network 2>/dev/null | grep "\.vid=" | head -n 1 | cut -d= -f2 | tr -d "'")
+    [ -n "$cur_vlan" ] && uci -q set wizard.default.VLANID="$cur_vlan"
+
+    uci commit wizard
+}
+
+apply() {
+    config_load wizard
+    local MKSettings IPADD VLANID SSID2G MESHID RmoveOldConfig WKEYTYPE WIFIKEY CH2G CH5G
+    config_get MKSettings     'default' MKSettings
+    config_get IPADD          'default' IPADD
+    config_get VLANID         'default' VLANID
+    config_get SSID2G         'default' SSID2G
+    config_get MESHID         'default' MESHID
+    config_get CH2G           'default' CH2G
+    config_get CH5G           'default' CH5G
+    config_get WKEYTYPE       'default' WKEYTYPE
+    config_get WIFIKEY        'default' WIFIKEY
+    config_get RmoveOldConfig 'default' RmoveOldConfig
+
+    [ -z "$MKSettings" ] && MKSettings="APMVL"
+    
+    # تنفيذ الحذف الشامل إذا كان الخيار مفعل أو افتراضياً
+    clean_all
+
+    local net="lan"
+    case "$MKSettings" in
+        APVL|APMVL)
+            [ -n "$VLANID" ] && {
+                set_vlan "$VLANID"
+                net="vlan${VLANID}"
+            }
+            ;;
+    esac
+
+    get_radios
+
+    # إنشاء إعدادات 2.4G جديدة كلياً
+    if [ -n "$RADIO_2G" ]; then
+        set_radio "$RADIO_2G" "$CH2G"
+        uci set wireless.ap_2g=wifi-iface
+        uci set wireless.ap_2g.device="$RADIO_2G"
+        uci set wireless.ap_2g.mode="ap"
+        uci set wireless.ap_2g.ssid="$SSID2G"
+        uci set wireless.ap_2g.network="$net"
+        uci set wireless.ap_2g.encryption="${WKEYTYPE:-none}"
+        [ -n "$WIFIKEY" ] && [ "$WKEYTYPE" != "none" ] && uci set wireless.ap_2g.key="$WIFIKEY"
+    fi
+
+    # إنشاء إعدادات 5G والميش جديدة كلياً بدون تداخلات قديمة
+    if [ -n "$RADIO_5G" ]; then
+        set_radio "$RADIO_5G" "$CH5G"
+        uci set wireless.ap_5g=wifi-iface
+        uci set wireless.ap_5g.device="$RADIO_5G"
+        uci set wireless.ap_5g.mode="ap"
+        uci set wireless.ap_5g.ssid="${SSID2G} 5G"
+        uci set wireless.ap_5g.network="$net"
+        uci set wireless.ap_5g.encryption="${WKEYTYPE:-none}"
+        [ -n "$WIFIKEY" ] && [ "$WKEYTYPE" != "none" ] && uci set wireless.ap_5g.key="$WIFIKEY"
+
+        case "$MKSettings" in
+            APMVL|APM)
+                [ -n "$MESHID" ] && {
+                    uci set wireless.mesh=wifi-iface
+                    uci set wireless.mesh.device="$RADIO_5G"
+                    uci set wireless.mesh.mode="mesh"
+                    uci set wireless.mesh.mesh_id="$MESHID"
+                    uci set wireless.mesh.network="lan"
+                    uci set wireless.mesh.encryption="none"
+                    uci set wireless.mesh.mesh_fwding="1"
+                }
+                ;;
+        esac
+    fi
+
+    [ -n "$IPADD" ] && uci set network.lan.ipaddr="$IPADD"
+    uci set dhcp.lan.ignore='1'
+
+    uci commit network
+    uci commit wireless
+    uci commit wizard
+}
+
+start() { 
+    apply
+    (
+        sleep 2
+        /etc/init.d/network restart
+        /etc/init.d/dnsmasq restart
+        /etc/init.d/firewall reload
+        wifi reload
+    ) &
+}
+
+stop() { exit 0; }
+restart() { start; }
