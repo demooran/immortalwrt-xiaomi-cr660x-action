@@ -46,7 +46,7 @@ uci set dhcp.lan.ndp=disabled
 
 # 4. تعيين IP ثابت و DNS (بدون Gateway)
 uci set network.lan.proto='static'
-uci set network.lan.ipaddr='192.168.1.20'
+uci set network.lan.ipaddr='192.168.1.21'
 uci set network.lan.netmask='255.255.255.0'
 uci set network.lan.dns='8.8.8.8 1.1.1.1'
 uci delete network.lan.gateway 2>/dev/null || true
@@ -736,13 +736,33 @@ for MENU_FILE in $(find feeds/luci package -path "*/root/usr/share/luci/menu.d/*
 done
 
 # ==========================================
-# 15. دمج إضافة vlanwizard_full_backup.tar.gz داخل الفيرموير
+# 15. دمج مجلد luci-app-vlanwizard من جذر المستودع داخل الفيرموير
 # ==========================================
-mkdir -p package/base-files/files
-if [ -f "$GITHUB_WORKSPACE/vlanwizard_full_backup.tar.gz" ]; then
-    tar -xzf "$GITHUB_WORKSPACE/vlanwizard_full_backup.tar.gz" -C package/base-files/files/
-    chmod +x package/base-files/files/etc/init.d/wizard 2>/dev/null || true
+VLANWIZARD_SRC=""
+if [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE/luci-app-vlanwizard" ]; then
+    VLANWIZARD_SRC="$GITHUB_WORKSPACE/luci-app-vlanwizard"
+elif [ -d "luci-app-vlanwizard" ]; then
+    VLANWIZARD_SRC="$(pwd)/luci-app-vlanwizard"
+fi
 
+if [ -n "$VLANWIZARD_SRC" ]; then
+    echo "📦 جاري دمج مجلد luci-app-vlanwizard من: $VLANWIZARD_SRC"
+    rm -rf package/luci-app-vlanwizard
+    cp -r "$VLANWIZARD_SRC" package/luci-app-vlanwizard
+
+    # ضبط صلاحيات التنفيذ لملفات التشغيل
+    find package/luci-app-vlanwizard/root/etc/init.d -type f -exec chmod +x {} \; 2>/dev/null || true
+    find package/luci-app-vlanwizard/root/usr/bin -type f -exec chmod +x {} \; 2>/dev/null || true
+    find package/luci-app-vlanwizard/root/usr/sbin -type f -exec chmod +x {} \; 2>/dev/null || true
+
+    # تفعيل الحزمة والاعتماديات الأساسية في .config
+    if [ -f .config ]; then
+        grep -q "^CONFIG_PACKAGE_luci-app-vlanwizard=" .config || echo "CONFIG_PACKAGE_luci-app-vlanwizard=y" >> .config
+        grep -q "^CONFIG_PACKAGE_luci-compat=" .config || echo "CONFIG_PACKAGE_luci-compat=y" >> .config
+        grep -q "^CONFIG_PACKAGE_rpcd=" .config || echo "CONFIG_PACKAGE_rpcd=y" >> .config
+    fi
+
+    # تفعيل خدمة wizard وتنظيف كاش LuCI عند الإقلاع الأول
     mkdir -p package/base-files/files/etc/uci-defaults
     cat << 'EOF' > package/base-files/files/etc/uci-defaults/95-enable-vlanwizard
 #!/bin/sh
@@ -750,13 +770,13 @@ if [ -x /etc/init.d/wizard ]; then
     /etc/init.d/wizard enable 2>/dev/null || true
     /etc/init.d/wizard start 2>/dev/null || true
 fi
-rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache /tmp/luci-*
 exit 0
 EOF
     chmod +x package/base-files/files/etc/uci-defaults/95-enable-vlanwizard
-    echo "✅ تم دمج إضافة vlanwizard وتفعيل خدمة wizard بنجاح."
+    echo "✅ تم دمج مجلد luci-app-vlanwizard وتفعيل خدمة wizard بنجاح."
 else
-    echo "⚠️ تحذير: لم يتم العثور على ملف vlanwizard_full_backup.tar.gz في المستودع."
+    echo "⚠️ تحذير: لم يتم العثور على مجلد luci-app-vlanwizard في جذر المستودع."
 fi
 
 # ==========================================
