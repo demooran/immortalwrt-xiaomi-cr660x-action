@@ -1,0 +1,19 @@
+{
+    "luci-app-vlanwizard": {
+        "description": "VLAN Wizard",
+        "read": {
+            "file": {
+                "/etc/config/wizard": [ "read" ],
+                "/etc/init.d/wizard": [ "read" ]
+            },
+            "uci": [ "wizard" ]
+        },
+        "write": {
+            "file": {
+                "/etc/config/wizard": [ "write" ],
+                "/etc/init.d/wizard": [ "exec" ]
+            },
+            "uci": [ "wizard" ]
+        }
+    }
+}
