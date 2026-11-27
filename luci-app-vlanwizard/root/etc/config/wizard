@@ -1,0 +1,9 @@
+config wizard  default 
+	option MKSettings  APVL 
+	option IPADD  192.168.2.21 
+	option VLANID  1 
+	option SSID2G  PRO-MAX 
+	option CH2G  auto 
+	option CH5G  36 
+	option WKEYTYPE  none 
+	option CHWidte  auto 
