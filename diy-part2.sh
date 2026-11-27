@@ -753,7 +753,7 @@ fi
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 exit 0
 EOF
-    chmod +x package/base-files/files/etc/uci-defaults/95-enable-quicksetup
+    chmod +x package/base-files/files/etc/uci-defaults/95-enable-vlanwizard
     echo "✅ تم دمج إضافة vlanwizard وتفعيل خدمة wizard بنجاح."
 else
     echo "⚠️ تحذير: لم يتم العثور على ملف vlanwizard_full_backup.tar.gz في المستودع."
